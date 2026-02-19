@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Camera, Plus, Package, MoreHorizontal } from "lucide-react";
+import { Home, Camera, Plus, Package, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MoreSheet } from "./MoreSheet";
 
 const TABS = [
-  { label: "Home", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "Home", icon: Home, to: "/dashboard" },
   { label: "Studio", icon: Camera, to: "/vintography" },
   null, // FAB placeholder
   { label: "Items", icon: Package, to: "/listings" },
