@@ -16,8 +16,6 @@ export async function processImage(
   operation: Operation,
   params: OperationParams
 ): Promise<ProcessImageResult> {
-  console.log('[vintography-api] processImage', { operation, params });
-
   try {
     const { data, error } = await supabase.functions.invoke('vintography', {
       body: { imageUrl, operation, params },

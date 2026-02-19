@@ -24,9 +24,9 @@ const PRIMARY_LINKS = [
 ];
 
 const SECONDARY_LINKS = [
-  { label: "Price Check", icon: Sparkles, to: "/price-check" },
-  { label: "Listing Optimiser", icon: SlidersHorizontal, to: "/optimize" },
-  { label: "Trends", icon: TrendingUp, to: "/trends" },
+  { label: "Price Check", icon: Sparkles, to: "/price-check", comingSoon: true },
+  { label: "Listing Optimiser", icon: SlidersHorizontal, to: "/optimize", comingSoon: true },
+  { label: "Trends", icon: TrendingUp, to: "/trends", comingSoon: true },
 ];
 
 interface MobileMenuProps {
@@ -119,7 +119,12 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       style={{ fontSize: 16, fontWeight: 500 }}
                     >
                       <item.icon size={18} className="flex-shrink-0" />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.comingSoon && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold uppercase tracking-wide">
+                          Soon
+                        </span>
+                      )}
                     </button>
                   );
                 })}

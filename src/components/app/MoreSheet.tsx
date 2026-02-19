@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const MORE_NAV = [
-  { label: "Price Check", icon: Sparkles, to: "/price-check" },
-  { label: "Listing Optimiser", icon: SlidersHorizontal, to: "/optimize" },
-  { label: "Trends", icon: TrendingUp, to: "/trends" },
+  { label: "Price Check", icon: Sparkles, to: "/price-check", comingSoon: true },
+  { label: "Listing Optimiser", icon: SlidersHorizontal, to: "/optimize", comingSoon: true },
+  { label: "Trends", icon: TrendingUp, to: "/trends", comingSoon: true },
 ];
 
 interface MoreSheetProps {
@@ -43,7 +43,12 @@ export function MoreSheet({ isOpen, onClose }: MoreSheetProps) {
             style={{ padding: "14px 20px" }}
           >
             <item.icon size={20} className="text-muted-foreground flex-shrink-0" />
-            <span className="text-foreground font-medium text-[15px]">{item.label}</span>
+            <span className="text-foreground font-medium text-[15px] flex-1">{item.label}</span>
+            {item.comingSoon && (
+              <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold uppercase tracking-wide">
+                Soon
+              </span>
+            )}
           </button>
         ))}
 

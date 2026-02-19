@@ -5,8 +5,9 @@ interface PreviousEditsProps {
 }
 
 export function PreviousEdits({ onSelect }: PreviousEditsProps) {
-  const { data: edits } = useVintographyJobs();
-  if (!edits || edits.length === 0) return null;
+  const { data: raw } = useVintographyJobs();
+  const edits = raw?.filter(j => j.result_image_url) ?? [];
+  if (edits.length === 0) return null;
 
   return (
     <div className="mt-6">
