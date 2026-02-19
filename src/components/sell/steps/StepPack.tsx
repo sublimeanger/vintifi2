@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import BeforeAfterSlider from "@/components/BeforeAfterSlider";
 import type { SellWizardState, SellWizardAction } from "@/lib/sell-wizard-state";
 import { clearWizardSession } from "@/lib/sell-wizard-state";
+import { useUpsertListing } from "@/hooks/useListings";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StepPackProps {
   state: SellWizardState;
@@ -40,16 +42,53 @@ function CopySection({ label, value }: { label: string; value: string }) {
 export function StepPack({ state, dispatch }: StepPackProps) {
   const { item, isSaving, savedListingId } = state;
   const [copiedAll, setCopiedAll] = useState(false);
+  const upsertListing = useUpsertListing();
+  const { user, refreshProfile } = useAuth();
 
   const photo0 = item.originalPhotos[0];
   const enhanced0 = item.enhancedPhotos[0] ?? photo0;
 
   async function handleSave() {
     dispatch({ type: 'SET_SAVING', loading: true });
-    await new Promise(r => setTimeout(r, 1500));
-    clearWizardSession();
-    dispatch({ type: 'SET_SAVED', listingId: 'mock-listing-id' });
-    toast.success('Item saved! 🎉');
+    try {
+      const conditionMap: Record<string, string> = {
+        'New with tags': 'new_with_tags',
+        'New without tags': 'new_without_tags',
+        'Very good': 'very_good',
+        'Good': 'good',
+        'Satisfactory': 'satisfactory',
+      };
+      const saved = await upsertListing.mutateAsync({
+        user_id: user!.id,
+        title: item.title,
+        optimised_title: item.optimisedTitle || undefined,
+        description: item.description,
+        optimised_description: item.optimisedDescription || undefined,
+        brand: item.brand,
+        category: item.category,
+        size: item.size,
+        condition: (conditionMap[item.condition] as any) ?? undefined,
+        colour: item.color,
+        original_photos: item.originalPhotos,
+        enhanced_photos: item.enhancedPhotos.filter(Boolean) as string[],
+        hashtags: item.hashtags,
+        suggested_price: item.suggestedPrice ?? undefined,
+        price_range_low: item.priceRange?.low ?? undefined,
+        price_range_median: item.priceRange?.median ?? undefined,
+        price_range_high: item.priceRange?.high ?? undefined,
+        chosen_price: item.chosenPrice ?? undefined,
+        source_url: item.source_url || undefined,
+        status: 'draft',
+      });
+      clearWizardSession();
+      dispatch({ type: 'SET_SAVED', listingId: saved.id });
+      toast.success('Item saved! 🎉');
+      await refreshProfile();
+    } catch {
+      toast.error('Failed to save — please try again');
+      dispatch({ type: 'SET_SAVING', loading: false });
+    }
+  }
   }
 
   function handleCopyAll() {

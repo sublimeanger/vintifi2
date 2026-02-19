@@ -3,8 +3,7 @@ import { Download, RotateCcw, ArrowLeft } from "lucide-react";
 import { Link, NavigateFunction } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { VintographyState, VintographyAction } from "@/lib/vintography-state";
-
-const MOCK_CREDITS = 47;
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ResultActionsProps {
   state: VintographyState;
@@ -15,6 +14,8 @@ interface ResultActionsProps {
 }
 
 export function ResultActions({ state, dispatch, returnToWizard, photoIndex = 0, navigate }: ResultActionsProps) {
+  const { profile } = useAuth();
+  const credits = profile?.credits_balance ?? 0;
   const { resultPhotoUrl } = state;
   if (!resultPhotoUrl) return null;
 
@@ -69,10 +70,10 @@ export function ResultActions({ state, dispatch, returnToWizard, photoIndex = 0,
       </button>
 
       {/* Credits */}
-      {MOCK_CREDITS <= 5 && (
+      {credits <= 5 && (
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs text-muted-foreground">
-            <span className="font-mono">{MOCK_CREDITS}</span> credits remaining
+            <span className="font-mono">{credits}</span> credits remaining
           </span>
           <Link to="/settings" className="text-xs font-medium text-primary hover:underline">
             Top up →

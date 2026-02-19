@@ -4,8 +4,7 @@ import { cn } from "@/lib/utils";
 import type { VintographyState, VintographyAction } from "@/lib/vintography-state";
 import { getPipelineCredits } from "@/lib/vintography-state";
 import { processImage } from "@/lib/vintography-api";
-
-const MOCK_CREDITS = 47;
+import { useAuth } from "@/contexts/AuthContext";
 
 interface GenerateButtonProps {
   state: VintographyState;
@@ -13,6 +12,7 @@ interface GenerateButtonProps {
 }
 
 export function GenerateButton({ state, dispatch }: GenerateButtonProps) {
+  const { profile, refreshProfile } = useAuth();
   const { pipeline, isProcessing, activeStepId, modelWizardStep } = state;
   const activeStep = pipeline.find(s => s.id === activeStepId);
 
@@ -32,13 +32,15 @@ export function GenerateButton({ state, dispatch }: GenerateButtonProps) {
       for (let i = 0; i < pipeline.length; i++) {
         const step = pipeline[i];
         const result = await processImage(currentUrl, step.operation, step.params);
-        if (!result.success) throw new Error('Processing failed');
+        if (!result.success) throw new Error(result.error ?? 'Processing failed');
         currentUrl = result.imageUrl;
         if (i < pipeline.length - 1) {
           dispatch({ type: 'PROCESSING_STEP_COMPLETE', stepIndex: i, imageUrl: currentUrl });
         }
       }
       dispatch({ type: 'PROCESSING_COMPLETE', imageUrl: currentUrl });
+      // Refresh credits after successful processing
+      await refreshProfile();
     } catch (err) {
       dispatch({ type: 'PROCESSING_ERROR', error: err instanceof Error ? err.message : 'Unknown error' });
     }

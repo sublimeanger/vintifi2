@@ -2,16 +2,16 @@ import { Link } from "react-router-dom";
 import { Sparkles, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-// ── Mock data (Phase 3: replace with auth context) ─────────────────────────
-const CREDITS = 47;
-const CREDITS_LIMIT = 50;
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MobileHeaderProps {
   onMenuOpen: () => void;
 }
 
 export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
+  const { profile } = useAuth();
+  const CREDITS = profile?.credits_balance ?? 0;
+  const CREDITS_LIMIT = profile?.credits_monthly_allowance ?? 3;
   const isCritical = CREDITS <= 2;
   const isLow = CREDITS / CREDITS_LIMIT <= 0.2 && !isCritical;
   // Normal: neutral background, coral sparkle icon (per spec §3.2)

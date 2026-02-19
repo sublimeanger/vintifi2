@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, Zap, Target, Crown, Loader2 } from "lucide-react";
+import { TrendingUp, Zap, Target, Crown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarketRangeBar } from "@/components/sell/MarketRangeBar";
 import type { SellWizardState, SellWizardAction, PriceStrategy } from "@/lib/sell-wizard-state";
+import { usePriceCheck } from "@/hooks/usePriceCheck";
 
 interface StepPriceProps {
   state: SellWizardState;

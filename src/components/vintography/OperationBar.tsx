@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { Operation, VintographyState, UserTier } from "@/lib/vintography-state";
 import { isOperationLocked } from "@/lib/vintography-state";
 import type { VintographyAction } from "@/lib/vintography-state";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface OperationDef {
   id: Operation;
@@ -21,8 +22,6 @@ const OPERATIONS: OperationDef[] = [
   { id: 'mannequin', label: 'Mannequin', icon: <PersonStanding size={20} />, credits: 1, tier: 'pro' },
   { id: 'ai_model', label: 'AI Model', icon: <UserCircle2 size={20} />, credits: 4, tier: 'business' },
 ];
-
-const MOCK_TIER: UserTier = 'pro';
 
 interface OperationBarProps {
   state: VintographyState;
@@ -77,8 +76,15 @@ function OperationButton({
 }
 
 export function OperationBar({ state, dispatch }: OperationBarProps) {
+  const { profile } = useAuth();
   const selectedOperations = new Set(state.pipeline.map(s => s.operation));
-  const activeOperation = state.pipeline.find(s => s.id === state.activeStepId)?.operation;
+  // Map subscription_tier to UserTier for lock checking
+  const tier: UserTier =
+    profile?.subscription_tier === 'business' || profile?.subscription_tier === 'scale' || profile?.subscription_tier === 'enterprise'
+      ? 'business'
+      : profile?.subscription_tier === 'pro'
+      ? 'pro'
+      : 'free';
 
   return (
     <>
@@ -89,7 +95,7 @@ export function OperationBar({ state, dispatch }: OperationBarProps) {
             key={op.id}
             op={op}
             isSelected={selectedOperations.has(op.id)}
-            locked={isOperationLocked(op.id, MOCK_TIER)}
+            locked={isOperationLocked(op.id, tier)}
             onSelect={() => dispatch({ type: 'SELECT_OPERATION', operation: op.id })}
             onDeselect={() => dispatch({ type: 'DESELECT_OPERATION' })}
             onLocked={() => dispatch({ type: 'OPEN_UPGRADE_MODAL' })}
@@ -104,7 +110,7 @@ export function OperationBar({ state, dispatch }: OperationBarProps) {
             key={op.id}
             op={op}
             isSelected={selectedOperations.has(op.id)}
-            locked={isOperationLocked(op.id, MOCK_TIER)}
+            locked={isOperationLocked(op.id, tier)}
             onSelect={() => dispatch({ type: 'SELECT_OPERATION', operation: op.id })}
             onDeselect={() => dispatch({ type: 'DESELECT_OPERATION' })}
             onLocked={() => dispatch({ type: 'OPEN_UPGRADE_MODAL' })}

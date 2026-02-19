@@ -2,42 +2,43 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Loader2, RotateCcw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SellWizardState, SellWizardAction } from "@/lib/sell-wizard-state";
+import { useOptimiseListing } from "@/hooks/useOptimiseListing";
 
 interface StepOptimiseProps {
   state: SellWizardState;
   dispatch: React.Dispatch<SellWizardAction>;
 }
 
-const MOCK_LISTING = {
-  title: "Nike Air Max 90 White/Grey UK9 — Excellent Condition",
-  description:
-    "Iconic Nike Air Max 90 in crisp white with grey accents. Worn only a few times — uppers are spotless and soles show minimal wear. A true wardrobe staple that pairs with everything from casual fits to smart-casual looks. Comes from a smoke-free, pet-free home. Happy to answer any questions!",
-  hashtags: [
-    "#nike",
-    "#airmax",
-    "#airmax90",
-    "#trainers",
-    "#sneakers",
-    "#whiteshoes",
-    "#mensshoes",
-    "#vintedfinds",
-  ],
-};
-
 export function StepOptimise({ state, dispatch }: StepOptimiseProps) {
   const { item, isOptimising, firstItemFree } = state;
   const hasData = !!item.optimisedTitle;
+  const optimise = useOptimiseListing();
 
   async function generate() {
     dispatch({ type: 'SET_OPTIMISING', loading: true });
-    await new Promise(r => setTimeout(r, 2000));
-    dispatch({
-      type: 'SET_OPTIMISED_DATA',
-      title: MOCK_LISTING.title,
-      description: MOCK_LISTING.description,
-      hashtags: MOCK_LISTING.hashtags,
-    });
-    dispatch({ type: 'SET_OPTIMISING', loading: false });
+    try {
+      const result = await optimise.mutateAsync({
+        title: item.title,
+        description: item.description,
+        brand: item.brand,
+        category: item.category,
+        size: item.size,
+        condition: item.condition,
+        colour: item.color,
+        photoUrls: item.enhancedPhotos.map((e, i) => e ?? item.originalPhotos[i]).filter(Boolean) as string[],
+        sell_wizard: true,
+      });
+      dispatch({
+        type: 'SET_OPTIMISED_DATA',
+        title: result.optimised_title,
+        description: result.optimised_description,
+        hashtags: result.hashtags,
+      });
+    } catch (err) {
+      // error handled by toast in hook
+    } finally {
+      dispatch({ type: 'SET_OPTIMISING', loading: false });
+    }
   }
 
   return (
