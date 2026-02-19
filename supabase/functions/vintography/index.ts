@@ -325,7 +325,65 @@ const OPERATION_MAP: Record<string, string> = {
   ai_model: "model_shot",
   enhance: "enhance",
   decrease: "decrease",
+  // Frontend alias: "steam" maps to the "decrease" (de-wrinkle) prompt
+  steam: "decrease",
 };
+
+/**
+ * Normalises frontend camelCase params → snake_case expected by prompts,
+ * and maps frontend enum values → backend enum values.
+ */
+function normaliseParams(operation: string, raw: Record<string, string>): Record<string, string> {
+  const p = { ...raw };
+
+  // camelCase → snake_case field renames
+  if (p.mannequinType !== undefined) { p.mannequin_type = p.mannequinType; delete p.mannequinType; }
+  if (p.modelBackground !== undefined) { p.model_bg = p.modelBackground; delete p.modelBackground; }
+  if (p.fullGarment !== undefined) { p.full_body = p.fullGarment; delete p.fullGarment; }
+
+  // lifestyle_bg: scene → bg_style with value mapping
+  if ((operation === "lifestyle_bg") && p.scene !== undefined) {
+    const sceneMap: Record<string, string> = {
+      living_room: "living_room_sofa",
+      bedroom: "bedroom_mirror",
+      kitchen: "kitchen_counter",
+      dressing_room: "dressing_room",
+      park: "golden_hour_park",
+      street: "city_street",
+      beach: "beach_summer",
+      brick_wall: "brick_wall",
+      autumn: "autumn_leaves",
+      marble: "marble_luxury",
+      linen: "linen_flat",
+    };
+    p.bg_style = sceneMap[p.scene] ?? p.scene;
+    delete p.scene;
+  }
+
+  // mannequin: invisible → ghost
+  if (p.mannequin_type === "invisible") p.mannequin_type = "ghost";
+
+  // flatlay: style field rename
+  if ((operation === "flatlay") && p.style !== undefined) {
+    p.flatlay_style = p.style;
+    delete p.style;
+  }
+
+  // ai_model: look/pose mapping
+  if (p.look !== undefined) {
+    const lookMap: Record<string, string> = { "1": "classic", "2": "editorial", "3": "streetwear" };
+    p.model_look = lookMap[p.look] ?? p.look;
+    delete p.look;
+  }
+  if (p.pose === "standing") p.pose = "standing_front";
+
+  // steam intensity: "steam" → "standard" (backend doesn't know "steam" value)
+  if ((operation === "steam" || operation === "decrease") && p.intensity === "steam") {
+    p.intensity = "standard";
+  }
+
+  return p;
+}
 
 const MODEL_MAP: Record<string, string> = {
   remove_bg: "google/gemini-2.5-flash-image",
@@ -345,10 +403,10 @@ const CREDIT_COST: Record<string, number> = {
 
 // Tier-gated operations (using new spec names)
 const TIER_OPERATIONS: Record<string, string[]> = {
-  free: ["clean_bg", "enhance", "decrease"],
-  pro: ["clean_bg", "enhance", "decrease", "lifestyle_bg", "flatlay", "ai_model", "mannequin"],
-  business: ["clean_bg", "enhance", "decrease", "lifestyle_bg", "ai_model", "mannequin", "ghost_mannequin", "flatlay"],
-  scale: ["clean_bg", "enhance", "decrease", "lifestyle_bg", "ai_model", "mannequin", "ghost_mannequin", "flatlay"],
+  free: ["clean_bg", "enhance", "decrease", "steam", "lifestyle_bg"],
+  pro: ["clean_bg", "enhance", "decrease", "steam", "lifestyle_bg", "flatlay", "ai_model", "mannequin"],
+  business: ["clean_bg", "enhance", "decrease", "steam", "lifestyle_bg", "ai_model", "mannequin", "ghost_mannequin", "flatlay"],
+  scale: ["clean_bg", "enhance", "decrease", "steam", "lifestyle_bg", "ai_model", "mannequin", "ghost_mannequin", "flatlay"],
 };
 
 Deno.serve(async (req) => {
@@ -487,8 +545,8 @@ Deno.serve(async (req) => {
     }
 
     const model = MODEL_MAP[promptKey];
-    const enrichedParams = { ...params, garment_context: garmentContext };
-    const prompt = OPERATION_PROMPTS[promptKey](enrichedParams);
+    const normalisedParams = normaliseParams(operation, { ...params, garment_context: garmentContext });
+    const prompt = OPERATION_PROMPTS[promptKey](normalisedParams);
 
     console.log(`[vintography] ${operation} (${promptKey}) → model ${model} for user ${user.id}`);
 

@@ -10,6 +10,7 @@ export interface PriceCheckInput {
   size?: string;
   listingId?: string;
   url?: string;
+  sell_wizard?: boolean;
 }
 
 export function usePriceCheck() {

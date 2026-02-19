@@ -1,5 +1,5 @@
 interface SimpleConfigProps {
-  operation: 'clean_bg' | 'enhance' | 'decrease';
+  operation: 'clean_bg' | 'enhance';
 }
 
 const CONFIG_MAP = {
@@ -12,11 +12,6 @@ const CONFIG_MAP = {
     title: "Enhance Photo",
     description: "Automatically adjusts brightness, contrast, sharpness, and colour balance to make your photo look professionally shot.",
     tip: "Applied last in the pipeline for best results.",
-  },
-  decrease: {
-    title: "Reduce File Size",
-    description: "Optimises your image for fast upload and display while preserving visible quality — ideal before listing.",
-    tip: "Recommended as the final step in your pipeline.",
   },
 };
 

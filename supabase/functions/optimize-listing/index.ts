@@ -10,7 +10,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { photoUrls, brand, category, size, condition, colour, currentTitle, currentDescription, seller_notes, sell_wizard } = body;
+    // Accept both wizard field names (title/description) and legacy names (currentTitle/currentDescription)
+    const { photoUrls, brand, category, size, condition, colour, seller_notes, sell_wizard } = body;
+    const currentTitle = body.title || body.currentTitle;
+    const currentDescription = body.description || body.currentDescription;
 
     // Auth
     const authHeader = req.headers.get("Authorization");
@@ -145,6 +148,11 @@ Return raw JSON only:
       } else {
         throw new Error("AI returned invalid response — please try again");
       }
+    }
+
+    // Cap hashtags to 5 (Vinted limit)
+    if (Array.isArray(result.hashtags)) {
+      result.hashtags = result.hashtags.slice(0, 5);
     }
 
     // Strip markdown from description

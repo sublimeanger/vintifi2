@@ -13,7 +13,7 @@ export type Operation =
 export interface OperationParams {
   // clean_bg / lifestyle_bg / enhance / decrease — no params
   // steam
-  intensity?: 'light' | 'steam' | 'deep';
+  intensity?: 'light' | 'standard' | 'deep';
   // flatlay
   style?: string;
   // lifestyle_bg
@@ -241,7 +241,7 @@ export function vintographyReducer(
 export function getDefaultParams(operation: Operation): OperationParams {
   switch (operation) {
     case 'steam':
-      return { intensity: 'steam' };
+      return { intensity: 'standard' };
     case 'flatlay':
       return { style: 'clean_white' };
     case 'lifestyle_bg':
@@ -274,7 +274,7 @@ export function getPipelineCredits(pipeline: PipelineStep[]): number {
 export const AI_MODEL_CHAIN_ALLOWED: Operation[] = ['enhance', 'decrease'];
 
 // Tier gating
-export const PRO_OPERATIONS: Operation[] = ['flatlay', 'mannequin', 'steam'];
+export const PRO_OPERATIONS: Operation[] = ['flatlay', 'mannequin'];
 export const BUSINESS_OPERATIONS: Operation[] = ['ai_model'];
 
 export type UserTier = 'free' | 'pro' | 'business';

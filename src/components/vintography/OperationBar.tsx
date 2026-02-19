@@ -14,13 +14,13 @@ interface OperationDef {
 }
 
 const OPERATIONS: OperationDef[] = [
-  { id: 'clean_bg', label: 'Remove BG', icon: <Eraser size={20} />, credits: 1, tier: 'free' },
-  { id: 'lifestyle_bg', label: 'Lifestyle', icon: <ImageIcon size={20} />, credits: 1, tier: 'free' },
-  { id: 'enhance', label: 'Enhance', icon: <Sparkles size={20} />, credits: 1, tier: 'free' },
-  { id: 'steam', label: 'Steam', icon: <Wind size={20} />, credits: 1, tier: 'pro' },
-  { id: 'flatlay', label: 'Flat Lay', icon: <LayoutGrid size={20} />, credits: 1, tier: 'pro' },
-  { id: 'mannequin', label: 'Mannequin', icon: <PersonStanding size={20} />, credits: 1, tier: 'pro' },
-  { id: 'ai_model', label: 'AI Model', icon: <UserCircle2 size={20} />, credits: 4, tier: 'business' },
+  { id: 'clean_bg', label: 'Remove BG', icon: <Eraser size={22} />, credits: 1, tier: 'free' },
+  { id: 'lifestyle_bg', label: 'Lifestyle', icon: <ImageIcon size={22} />, credits: 1, tier: 'free' },
+  { id: 'enhance', label: 'Enhance', icon: <Sparkles size={22} />, credits: 1, tier: 'free' },
+  { id: 'steam', label: 'Steam', icon: <Wind size={22} />, credits: 1, tier: 'free' },
+  { id: 'flatlay', label: 'Flat Lay', icon: <LayoutGrid size={22} />, credits: 1, tier: 'pro' },
+  { id: 'mannequin', label: 'Mannequin', icon: <PersonStanding size={22} />, credits: 1, tier: 'pro' },
+  { id: 'ai_model', label: 'AI Model', icon: <UserCircle2 size={22} />, credits: 4, tier: 'business' },
 ];
 
 interface OperationBarProps {
@@ -69,7 +69,7 @@ function OperationButton({
       <span className={cn(isSelected ? "text-primary" : "text-foreground/70")}>
         {op.icon}
       </span>
-      <span className="text-[11px] font-medium leading-tight text-center">{op.label}</span>
+      <span className="text-xs font-medium leading-tight text-center">{op.label}</span>
       <span className="text-[9px] font-mono text-muted-foreground">{op.credits}cr</span>
     </button>
   );
@@ -89,7 +89,7 @@ export function OperationBar({ state, dispatch }: OperationBarProps) {
   return (
     <>
       {/* Desktop: 4-col grid */}
-      <div className="hidden lg:grid grid-cols-4 gap-2 p-3">
+      <div className="hidden lg:grid grid-cols-4 gap-2 p-3 bg-surface-sunken/50 rounded-xl">
         {OPERATIONS.map(op => (
           <OperationButton
             key={op.id}

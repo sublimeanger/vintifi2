@@ -24,8 +24,9 @@ export function OperationConfig({ state, dispatch }: OperationConfigProps) {
   switch (operation) {
     case 'clean_bg':
     case 'enhance':
-    case 'decrease':
       return <SimpleConfig operation={operation} />;
+    case 'decrease':
+      return <SteamConfig params={params} onChange={onChange} />;
     case 'steam':
       return <SteamConfig params={params} onChange={onChange} />;
     case 'flatlay':

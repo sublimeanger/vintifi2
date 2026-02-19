@@ -28,7 +28,7 @@ export function PhotoCanvas({ state }: PhotoCanvasProps) {
   const totalSteps = pipeline.length;
 
   const inner = (
-    <div className="relative rounded-xl overflow-hidden bg-surface shadow-lg aspect-[4/5] lg:aspect-auto lg:max-h-[calc(100vh-200px)]">
+    <div className="relative rounded-2xl overflow-hidden border border-border shadow-md bg-surface aspect-[4/5] lg:aspect-auto lg:max-h-[calc(100vh-200px)]">
       {/* Photo */}
       {originalPhotoUrl && (
         <img

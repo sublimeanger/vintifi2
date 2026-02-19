@@ -47,6 +47,7 @@ export function StepPrice({ state, dispatch }: StepPriceProps) {
         condition: item.condition,
         size: item.size,
         url: item.source_url || undefined,
+        sell_wizard: true,
       });
 
       const low = result.priceRange?.low ?? result.price_range_low ?? 0;

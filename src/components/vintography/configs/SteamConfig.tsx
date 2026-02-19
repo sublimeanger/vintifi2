@@ -8,7 +8,7 @@ interface SteamConfigProps {
 
 const INTENSITY_OPTIONS = [
   { value: 'light', label: 'Light Press' },
-  { value: 'steam', label: 'Steam' },
+  { value: 'standard', label: 'Steam' },
   { value: 'deep', label: 'Deep Press' },
 ];
 
@@ -24,7 +24,7 @@ export function SteamConfig({ params, onChange }: SteamConfigProps) {
       <SegmentedControl
         label="Intensity"
         options={INTENSITY_OPTIONS}
-        value={params.intensity ?? 'steam'}
+        value={params.intensity ?? 'standard'}
         onChange={v => onChange({ intensity: v as OperationParams['intensity'] })}
       />
       <p className="text-xs italic text-muted-foreground/70">
