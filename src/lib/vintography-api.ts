@@ -1,3 +1,4 @@
+import { supabase } from '@/integrations/supabase/client';
 import type { Operation, OperationParams } from './vintography-state';
 
 export interface ProcessImageResult {
@@ -7,18 +8,32 @@ export interface ProcessImageResult {
 }
 
 /**
- * Phase 3 stub: simulates a 2-second processing delay and returns
- * the original image URL as the result.
- * 
- * This signature is identical to what will be wired to a real
- * Edge Function in a later phase.
+ * Calls the real `vintography` Edge Function.
+ * Preserves the exact same interface so all Phase 3/4 components work unchanged.
  */
 export async function processImage(
   imageUrl: string,
   operation: Operation,
   params: OperationParams
 ): Promise<ProcessImageResult> {
-  console.log('[vintography-api] processImage (stub)', { operation, params });
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return { success: true, imageUrl };
+  console.log('[vintography-api] processImage', { operation, params });
+
+  try {
+    const { data, error } = await supabase.functions.invoke('vintography', {
+      body: { imageUrl, operation, params },
+    });
+
+    if (error) {
+      return { success: false, imageUrl, error: error.message };
+    }
+
+    if (!data?.success) {
+      return { success: false, imageUrl, error: data?.error ?? 'Processing failed' };
+    }
+
+    return { success: true, imageUrl: data.resultUrl ?? imageUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return { success: false, imageUrl, error: msg };
+  }
 }
