@@ -385,6 +385,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_credits: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_operation: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       deduct_credits: {
         Args: {
           p_amount: number

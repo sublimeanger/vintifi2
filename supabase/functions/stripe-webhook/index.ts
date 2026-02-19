@@ -65,21 +65,16 @@ Deno.serve(async (req) => {
         if (session.mode === "payment" && session.metadata?.type === "credit_pack") {
           const userId = session.metadata.user_id;
           if (userId) {
-            const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+          const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
             const productId = lineItems.data[0]?.price?.product as string;
             const creditsToAdd = CREDIT_PACK_MAP[productId] || 0;
             if (creditsToAdd > 0) {
-              // Add credits atomically via RPC
-              await supabase.rpc("deduct_credits", {
+              await supabase.rpc("add_credits", {
                 p_user_id: userId,
-                p_amount: -creditsToAdd, // negative deduction = credit addition
+                p_amount: creditsToAdd,
                 p_operation: "credit_pack_purchase",
                 p_description: `Credit pack: +${creditsToAdd} credits`,
               });
-              // Also directly update balance for additive case
-              await supabase.from("profiles")
-                .update({ credits_balance: creditsToAdd })
-                .eq("id", userId);
             }
           }
           break;
