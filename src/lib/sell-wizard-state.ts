@@ -107,12 +107,15 @@ export const initialWizardState: SellWizardState = {
 // ─── Session Recovery ─────────────────────────────────────────────────────────
 
 const SESSION_KEY = 'vintifi_sell_wizard_v2';
+const STATE_VERSION = 2; // Bump this whenever SellWizardState shape changes
 
 export function sessionRecoveryInit(initial: SellWizardState): SellWizardState {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return initial;
-    const parsed = JSON.parse(raw) as SellWizardState;
+    const parsed = JSON.parse(raw) as SellWizardState & { _v?: number };
+    // Discard stale data if schema version has changed
+    if (parsed._v !== STATE_VERSION) return initial;
     // Reset transient loading states on recovery
     return {
       ...parsed,
@@ -129,7 +132,7 @@ export function sessionRecoveryInit(initial: SellWizardState): SellWizardState {
 
 export function saveWizardSession(state: SellWizardState): void {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...state, _v: STATE_VERSION }));
   } catch {
     // quota exceeded — ignore
   }

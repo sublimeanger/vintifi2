@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, Loader2, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import BeforeAfterSlider from "@/components/BeforeAfterSlider";
 import { processImage } from "@/lib/vintography-api";
 import { uploadImage } from "@/lib/upload";
@@ -36,6 +37,9 @@ export function StepPhotos({ state, dispatch }: StepPhotosProps) {
         (_, i) => i > activeIndex && !item.enhancedPhotos[i]
       );
       if (nextUnenhanced !== -1) setActiveIndex(nextUnenhanced);
+    } catch (err) {
+      console.error('[StepPhotos] BG removal failed', err);
+      toast.error('Background removal failed — please try again');
     } finally {
       setProcessingIndex(null);
     }

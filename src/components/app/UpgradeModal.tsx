@@ -73,16 +73,17 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
                 >
                   Upgrade to Pro
                 </h2>
-                <p className="text-sm text-white/80">Unlimited AI photos + listings</p>
+                <p className="text-sm text-white/80">50 credits / month + priority features</p>
               </div>
 
               {/* Feature list */}
               <div className="px-6 py-5 space-y-3">
                 {[
-                  "Unlimited photo backgrounds",
-                  "AI listing descriptions",
-                  "Price intelligence",
-                  "Trend alerts",
+                  "50 credits / month",
+                  "AI model shots & flat-lay styling",
+                  "Smart listing descriptions",
+                  "Price intelligence & trend radar",
+                  "Priority processing speed",
                 ].map((feat) => (
                   <div key={feat} className="flex items-center gap-3 text-sm text-foreground">
                     <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">

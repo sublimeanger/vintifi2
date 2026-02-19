@@ -64,7 +64,7 @@ export default function Login() {
               <label className="text-sm font-medium text-foreground" htmlFor="password">
                 Password
               </label>
-              <Link to="/signup" className="text-xs text-primary hover:text-primary/80 transition-colors">
+              <Link to="/reset-password" className="text-xs text-primary hover:text-primary/80 transition-colors">
                 Forgot password?
               </Link>
             </div>

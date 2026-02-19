@@ -5,7 +5,7 @@ import { Star, Zap, Users } from "lucide-react";
 const proofItems = [
   {
     icon: <Star className="w-4 h-4 fill-current" style={{ color: "hsl(42 92% 56%)" }} />,
-    text: "Trusted by Vinted sellers",
+    text: "Join our early access sellers",
   },
   { separator: true },
   {
@@ -15,7 +15,7 @@ const proofItems = [
   { separator: true },
   {
     icon: <Users className="w-4 h-4 text-success" />,
-    text: "No design skills needed",
+    text: "Launching Q1 2026 — spots limited",
   },
 ];
 

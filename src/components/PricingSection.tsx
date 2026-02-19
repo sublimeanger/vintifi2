@@ -109,7 +109,7 @@ const PricingSection: React.FC = () => {
               )}
             >
               Annual
-              <span className="ml-1.5 text-xs text-success font-semibold">Save 20%</span>
+              <span className="ml-1.5 text-xs font-semibold bg-success/10 text-success px-1.5 py-0.5 rounded-full">Save 20%</span>
             </button>
           </div>
         </ScrollReveal>

@@ -4,6 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { MobileHeader } from "./MobileHeader";
 import { MobileMenu } from "./MobileMenu";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -26,7 +27,9 @@ export function AppShell() {
       {/* Main content */}
       <main className="lg:ml-[260px] min-h-screen pt-14 lg:pt-0 pb-24 lg:pb-0">
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-4 lg:py-8">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
 
