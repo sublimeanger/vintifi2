@@ -70,7 +70,7 @@ function CreditMeter({
             className={cn("h-full rounded-full", barColor)}
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
-            transition={{ type: "spring", stiffness: 180, damping: 24 }}
+            transition={{ type: "tween", ease: "easeOut", duration: 0.6 }}
           />
         </div>
       )}

@@ -29,7 +29,7 @@ export function ResultActions({ state, dispatch, returnToWizard, photoIndex = 0,
       navigate('/sell');
       return;
     }
-    console.log('[ResultActions] Save to Listing (stub)', resultPhotoUrl);
+    // Save to listing — feature coming soon
   }
 
   return (

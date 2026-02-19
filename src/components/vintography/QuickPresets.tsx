@@ -1,6 +1,7 @@
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VintographyState, VintographyAction } from "@/lib/vintography-state";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Preset {
   id: string;
@@ -17,8 +18,6 @@ const PRESETS: Preset[] = [
   { id: 'steam_list', label: 'Steam & List', operations: ['steam', 'clean_bg'], credits: 2, tier: 'free' },
 ];
 
-const MOCK_TIER: 'free' | 'pro' = 'pro';
-
 function isPresetActive(state: VintographyState, preset: Preset): boolean {
   const pipelineOps = state.pipeline.map(s => s.operation);
   if (pipelineOps.length !== preset.operations.length) return false;
@@ -31,6 +30,8 @@ interface QuickPresetsProps {
 }
 
 export function QuickPresets({ state, dispatch }: QuickPresetsProps) {
+  const { profile } = useAuth();
+  const userTier = (profile?.subscription_tier ?? 'free') as 'free' | 'pro';
   function applyPreset(preset: Preset) {
     // Reset pipeline then add each step
     // We do this by clearing and re-adding
@@ -50,7 +51,7 @@ export function QuickPresets({ state, dispatch }: QuickPresetsProps) {
     <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2">
       {PRESETS.map(preset => {
         const active = isPresetActive(state, preset);
-        const locked = preset.tier === 'pro' && MOCK_TIER === 'free';
+        const locked = preset.tier === 'pro' && userTier === 'free';
 
         return (
           <button

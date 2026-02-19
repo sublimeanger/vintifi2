@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function SignUp() {
   const { signUp } = useAuth();
@@ -10,6 +11,7 @@ export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,13 +25,42 @@ export default function SignUp() {
     if (error) {
       toast.error(error.message ?? 'Sign up failed');
     } else {
-      navigate('/dashboard');
+      // Check if email confirmation is required (session will be null)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate('/dashboard');
+      } else {
+        setEmailSent(true);
+      }
     }
   };
 
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+        <Link to="/" className="mb-8 text-2xl font-bold text-primary tracking-tight" style={{ fontFamily: "'Sora', sans-serif" }}>
+          Vintifi
+        </Link>
+        <div className="w-full max-w-[420px] bg-surface border border-border rounded-2xl p-8 shadow-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+            <span className="text-3xl">📬</span>
+          </div>
+          <h1 className="text-xl font-bold text-foreground mb-2" style={{ fontFamily: "'Sora', sans-serif" }}>
+            Check your email
+          </h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account and claim your 3 free credits.
+          </p>
+          <Link to="/login" className="text-sm text-primary hover:text-primary/80 font-medium transition-colors">
+            ← Back to sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      {/* Wordmark */}
       <Link
         to="/"
         className="mb-8 text-2xl font-bold text-primary tracking-tight"
