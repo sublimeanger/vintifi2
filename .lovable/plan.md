@@ -1,88 +1,120 @@
 
-# Critical Bug Fixes — Full Audit Implementation
+# Deep UI/UX Audit — Full Fix Implementation
 
-This plan implements all 9 fixes from your audit document. The edge function fix (Fix 1) is the most critical and will make operations actually work end-to-end.
-
----
-
-## What's broken and why
-
-The frontend and backend are speaking different languages:
-
-- Frontend sends `steam`, backend doesn't know what `steam` is
-- Frontend sends `mannequinType: "invisible"`, backend expects `mannequin_type: "ghost"`
-- Frontend sends `scene: "living_room"`, backend expects `bg_style: "living_room_sofa"`
-- `steam` and `lifestyle_bg` are locked behind Pro tier but the spec says they're Free
-- `optimize-listing` reads `currentTitle`/`currentDescription` from the body but the wizard sends `title`/`description`
-- Price check in the wizard doesn't pass `sell_wizard: true`, so the first-item-free pass isn't applied
+Based on the uploaded audit document and code inspection, here is exactly what is wrong and how to fix every item. The audit found 35 issues across P0/P1/P2/P3 severity levels. This plan tackles all actionable items (skipping ones that require real photos/OG assets which need to be provided externally).
 
 ---
 
-## Files to change (12 total)
+## P0 — Broken / Fundamentally Wrong (fix first)
 
-### Backend — Edge Functions (most critical)
+### Fix 1 — 404 silently redirects to `/` (App.tsx line 61)
+`<Route path="*" element={<Navigate to="/" replace />} />` must become `<Route path="*" element={<NotFound />} />`. `NotFound.tsx` exists but is never used.
 
-**1. `supabase/functions/vintography/index.ts`**
-- Add `steam: "decrease"` alias to `OPERATION_MAP` so the frontend operation name is recognised
-- Add `normaliseParams()` function that converts camelCase → snake_case param names AND maps frontend values to backend-expected values (e.g. `invisible` → `ghost`, `living_room` → `living_room_sofa`, `steam` intensity → `standard`)
-- Call `normaliseParams()` before building the prompt (replacing the current `enrichedParams` line)
-- Fix `TIER_OPERATIONS` to add `steam` and `lifestyle_bg` to the `free` tier (currently only in `pro`/`business`)
+### Fix 2 — "Forgot password?" goes to `/signup` (Login.tsx line 67)
+The link uses `<Link to="/signup">`. Need to:
+- Create `/reset-password` page with a Supabase `resetPasswordForEmail()` flow
+- Fix the link in `Login.tsx` to point to `/reset-password`
+- Add the route in `App.tsx`
 
-**2. `supabase/functions/optimize-listing/index.ts`**
-- Fix field name destructuring: accept both `body.title` and `body.currentTitle` (same for description), so the wizard's field names work
-- Cap hashtags array to 5 items before returning (Vinted limit)
+### Fix 3 — 6 empty/dead pages linked from nav
+`Listings.tsx`, `ItemDetail.tsx`, `Settings.tsx`, `PriceCheck.tsx`, `Optimize.tsx`, `Trends.tsx` all render the same empty shell but the sidebar/nav link to them. Users hit dead ends. Fix: add "Coming Soon" badge to nav items that aren't ready, or implement basic placeholder content with a clear "Coming Soon" state. The nav items for unimplemented pages (`/listings`, `/price-check`, `/optimize`, `/trends`) should show a badge and the pages should have proper "coming soon" states rather than broken links. The `Settings` page should have at minimum account info + sign-out.
 
-### Frontend — Functionality
-
-**3. `src/components/vintography/OperationBar.tsx`**
-- Change `steam` tier from `'pro'` → `'free'`
-- Increase icon sizes from 20 → 22
-- Increase label size from `text-[11px]` → `text-xs`
-- Add subtle background to the desktop grid container
-
-**4. `src/lib/vintography-state.ts`**
-- Remove `steam` from `PRO_OPERATIONS` (it's already in the list, needs removing)
-- Fix the default `intensity` param for `steam` from `'steam'` → `'standard'` (the backend expects `standard`/`light`/`deep`, not `steam`)
-
-**5. `src/components/vintography/configs/SimpleConfig.tsx`**
-- Remove the `decrease` entry from `CONFIG_MAP` (it incorrectly says "Reduce File Size")
-- Update the prop type to only accept `'clean_bg' | 'enhance'`
-
-**6. `src/components/vintography/OperationConfig.tsx`**
-- Route `decrease` to `<SteamConfig>` (currently routes to `<SimpleConfig>`)
-- The `steam` case already correctly routes to `<SteamConfig>`
-
-**7. `src/components/sell/steps/StepPrice.tsx`**
-- Add `sell_wizard: true` to the `priceCheck.mutateAsync()` call so the first-item-free pass applies correctly
-
-**8. `src/hooks/usePriceCheck.ts`**
-- Add `sell_wizard?: boolean` to the `PriceCheckInput` interface
-
-### Frontend — Visual
-
-**9. `src/index.css`**
-- Change `--sidebar-muted: 230 10% 52%` → `230 10% 65%` for better contrast on the dark sidebar
-
-**10. `src/components/vintography/PhotoCanvas.tsx`**
-- Wrap the canvas in a container with `rounded-2xl overflow-hidden border border-border shadow-md bg-surface`
+### Fix 4 — SignUp doesn't handle email confirmation
+If email confirmation is required by the backend, `signUp()` returning no error means "email sent" not "logged in". `SignUp.tsx` immediately calls `navigate('/dashboard')` so `ProtectedRoute` bounces the user back to `/login` with no explanation. Fix: detect when sign-up succeeds but session is null, show "Check your email" message instead of navigating.
 
 ---
 
-## Summary table
+## P1 — Serious UX Problems
 
-| Fix | File | Impact |
-|-----|------|--------|
-| 1a | vintography edge fn | `steam` operation now recognised |
-| 1b | vintography edge fn | Params translate correctly (mannequin, lifestyle, model shot) |
-| 1c | vintography edge fn | `steam` + `lifestyle_bg` work on Free tier |
-| 2 | optimize-listing edge fn | Title/description appear in AI prompt |
-| 3 | OperationBar.tsx | `steam` unlocked for free users |
-| 4 | vintography-state.ts | Lock logic matches spec; steam defaults fixed |
-| 5 | SimpleConfig.tsx | No more "Reduce File Size" description for steam |
-| 6 | OperationConfig.tsx | `decrease` shows steam config, not wrong one |
-| 7 | StepPrice.tsx | First-item-free applies to price check |
-| 8 | usePriceCheck.ts | Type updated for sell_wizard flag |
-| 9 | index.css | Sidebar nav text is readable |
-| 10 | PhotoCanvas.tsx | Photo has a visible frame/container |
+### Fix 5 — QuickPresets hardcoded mock tier (QuickPresets.tsx line 20)
+`const MOCK_TIER: 'free' | 'pro' = 'pro';` — always 'pro', lock icon never shows. Fix: replace with `const { profile } = useAuth(); const tier = profile?.subscription_tier ?? 'free';`.
 
-After approval, the edge functions will be redeployed automatically.
+### Fix 6 — Mobile Photo Studio drawer doesn't open
+On mobile, tapping an operation in `OperationBar` dispatches `SELECT_OPERATION` which does set `drawerOpen: true` in the reducer — but `ConfigContainer` on mobile renders a `BottomSheet` that checks `state.drawerOpen`. Looking at the reducer: `SELECT_OPERATION` does set `drawerOpen: true`, so the issue may be the BottomSheet not receiving state. Need to verify `ConfigContainer` and `BottomSheet` wiring.
+
+### Fix 7 — Empty catch block in StepPhotos (handleQuickRemoveBg)
+The `catch` block in `handleQuickRemoveBg` is empty — failures show nothing. Fix: add `toast.error('Background removal failed — please try again')`.
+
+### Fix 8 — Credits meter spring animation overshoots
+`AppSidebar.tsx` CreditMeter uses `type: "spring"` which makes the bar bounce past 100%. Fix: change to `type: "tween", ease: "easeOut", duration: 0.6`.
+
+### Fix 9 — console.log left in ResultActions.tsx (line 32)
+`console.log('[ResultActions] Save to Listing (stub)', resultPhotoUrl)` — remove this.
+
+### Fix 10 — Sell Wizard session recovery doesn't validate shape
+`sessionRecoveryInit` does `JSON.parse()` without version checking. If schema changes, stale data causes crashes. Fix: wrap in try/catch with version check (already has try/catch, but add a `STATE_VERSION` check — if stored version doesn't match current, discard).
+
+---
+
+## P2 — Visual / Polish Issues
+
+### Fix 11 — Pricing "Save 20%" is plain text (PricingSection.tsx)
+Wrap the badge in `bg-success/10 text-success px-1.5 py-0.5 rounded-full` pill.
+
+### Fix 12 — HowItWorks connecting line uses non-existent Tailwind classes
+`left-1/6` and `right-1/6` don't exist in Tailwind. Fix: use `left-[16.67%] right-[16.67%]` or restructure with proper positioning.
+
+### Fix 13 — UpgradeModal feature list oversells Pro tier
+Says "Unlimited photo backgrounds" and "Unlimited AI listings" but Pro gives 50 credits/month. Fix: update to "50 credits / month", "Priority processing", etc.
+
+### Fix 14 — Empty state buttons use `rounded-lg` vs `rounded-xl` inconsistency
+`EmptyState.tsx` uses `rounded-lg` on CTAs. Fix: standardise to `rounded-xl`.
+
+### Fix 15 — Dark mode CSS is dead code
+`index.css` has a full `.dark {}` block but nothing ever adds `class="dark"` to `<html>`. Either add a dark mode toggle to Settings, or remove the dead CSS.
+
+### Fix 16 — Social proof bar generic filler
+`SocialProofBar.tsx` has generic slogans with no numbers. Fix: update copy to "Join early access sellers" or "Launching Q1 2026" messaging.
+
+---
+
+## P3 — Architecture / Code Quality
+
+### Fix 17 — Duplicate Supabase client (src/lib/supabase.ts)
+`src/lib/supabase.ts` creates a second Supabase client while `src/integrations/supabase/client.ts` is the canonical one. Fix: audit all imports of `src/lib/supabase.ts`, redirect them to the correct path, then delete the duplicate.
+
+### Fix 18 — React Error Boundary missing
+Zero error boundaries means any runtime error in Vintography (complex state) causes a blank white screen. Fix: create an `ErrorBoundary` component and wrap `<Outlet />` in `AppShell.tsx`.
+
+---
+
+## Files to change (18 total)
+
+| File | Change |
+|------|--------|
+| `src/App.tsx` | Use `<NotFound />` for `*` route; add `/reset-password` route |
+| `src/pages/Login.tsx` | Fix forgot password link to `/reset-password` |
+| `src/pages/ResetPassword.tsx` | **NEW** — Supabase `resetPasswordForEmail()` flow with email form |
+| `src/pages/SignUp.tsx` | Handle "email confirmation sent" state (show message instead of redirect) |
+| `src/components/vintography/QuickPresets.tsx` | Replace `MOCK_TIER` with real `useAuth()` tier |
+| `src/components/vintography/ResultActions.tsx` | Remove `console.log` |
+| `src/components/app/AppSidebar.tsx` | Fix CreditMeter animation to `tween` instead of `spring` |
+| `src/components/app/AppShell.tsx` | Add `ErrorBoundary` wrapper around `<Outlet />` |
+| `src/components/app/ErrorBoundary.tsx` | **NEW** — React class-based error boundary component |
+| `src/components/app/UpgradeModal.tsx` | Fix feature list to match actual Pro tier limits |
+| `src/components/app/EmptyState.tsx` | Change `rounded-lg` → `rounded-xl` on CTAs |
+| `src/components/EmptyState.tsx` (if separate) | Same |
+| `src/components/HowItWorks.tsx` | Fix `left-1/6` → `left-[16.67%]` |
+| `src/components/PricingSection.tsx` | Wrap "Save 20%" in pill badge |
+| `src/components/SocialProofBar.tsx` | Update copy to pre-launch messaging |
+| `src/lib/sell-wizard-state.ts` | Add `STATE_VERSION` check to `sessionRecoveryInit` |
+| `src/lib/supabase.ts` | Delete; migrate all imports |
+| `src/components/sell/steps/StepPhotos.tsx` | Add `toast.error()` in empty catch block |
+
+---
+
+## Implementation order
+
+1. Critical routing fixes (404, forgot password, signup confirmation) — these block real users
+2. QuickPresets mock tier — feature is visibly broken
+3. Error boundary — safety net for everything else
+4. Error toasts in catch blocks — user feedback
+5. Visual polish (credits meter, pricing badge, HowItWorks line, UpgradeModal copy)
+6. Code quality (duplicate client, console.log, session version check)
+
+Items **not in this plan** (require external assets):
+- Real before/after product photos for landing page (P0 #1) — needs actual photos
+- Branded OG image (P0 #3) — needs design asset
+- FeatureShowcase mockup images (P0 #2) — needs screenshots/graphics
+- Analytics setup (P3 #32) — needs analytics provider decision
+- Per-page SEO titles (P3 #33) — needs content decisions
