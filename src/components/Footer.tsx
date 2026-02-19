@@ -2,20 +2,25 @@ import React from "react";
 
 const footerLinks = {
   Product: [
-    { label: "Features", href: "#features" },
+    { label: "Photo Studio", href: "#features" },
+    { label: "Price Check", href: "#features" },
+    { label: "Listing AI", href: "#features" },
+    { label: "Trends", href: "#features" },
     { label: "Pricing", href: "#pricing" },
-    { label: "How It Works", href: "#how-it-works" },
-    { label: "Changelog", href: "#" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "#" },
     { label: "Terms of Service", href: "#" },
-    { label: "Cookie Policy", href: "#" },
+    { label: "Contact", href: "mailto:hello@vintifi.com" },
   ],
 };
 
 const Footer: React.FC = () => {
   const scrollTo = (href: string) => {
+    if (href.startsWith("mailto:")) {
+      window.location.href = href;
+      return;
+    }
     if (href.startsWith("#") && href.length > 1) {
       const el = document.querySelector(href);
       if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -24,25 +29,31 @@ const Footer: React.FC = () => {
 
   return (
     <footer
-      className="py-16 border-t border-white/8"
-      style={{ background: "hsl(220 25% 7%)" }}
+      className="pt-16 pb-8"
+      style={{ background: "hsl(230 20% 6%)" }}
     >
       <div className="container">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-2">
-            <span className="font-display font-bold text-2xl text-white mb-3 block">
+          {/* Brand + tagline */}
+          <div className="col-span-2">
+            <span className="font-display font-bold text-2xl text-white mb-3 block tracking-tight">
               Vintifi
             </span>
-            <p className="text-sm font-body text-white/40 max-w-xs leading-relaxed">
-              AI-powered photos and smart listings for Vinted sellers. Turn phone photos into sales.
+            <p
+              className="text-sm font-body max-w-xs leading-relaxed"
+              style={{ color: "hsla(0, 0%, 100%, 0.50)" }}
+            >
+              AI photo studio for Vinted sellers. Turn phone photos into sales.
             </p>
           </div>
 
           {/* Link columns */}
           {Object.entries(footerLinks).map(([column, links]) => (
             <div key={column}>
-              <h4 className="font-body font-semibold text-white/70 text-sm mb-4 uppercase tracking-wider">
+              <h4
+                className="font-body text-[13px] font-semibold uppercase tracking-[0.06em] mb-4"
+                style={{ color: "hsla(0, 0%, 100%, 0.40)" }}
+              >
                 {column}
               </h4>
               <ul className="space-y-3">
@@ -50,7 +61,10 @@ const Footer: React.FC = () => {
                   <li key={link.label}>
                     <button
                       onClick={() => scrollTo(link.href)}
-                      className="text-sm font-body text-white/35 hover:text-white transition-colors duration-200"
+                      className="text-sm font-body transition-colors duration-200"
+                      style={{ color: "hsla(0, 0%, 100%, 0.60)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "hsla(0, 0%, 100%, 1)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "hsla(0, 0%, 100%, 0.60)")}
                     >
                       {link.label}
                     </button>
@@ -61,11 +75,21 @@ const Footer: React.FC = () => {
           ))}
         </div>
 
-        <div className="border-t border-white/8 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-xs font-mono text-white/25">
+        {/* Divider (§7.10) */}
+        <div
+          className="border-t pt-8 flex flex-col md:flex-row items-center justify-between gap-4"
+          style={{ borderColor: "hsla(0, 0%, 100%, 0.08)" }}
+        >
+          <p
+            className="text-[13px] font-body"
+            style={{ color: "hsla(0, 0%, 100%, 0.35)" }}
+          >
             © {new Date().getFullYear()} Vintifi. All rights reserved.
           </p>
-          <p className="text-xs font-mono text-white/20">
+          <p
+            className="text-[13px] font-mono"
+            style={{ color: "hsla(0, 0%, 100%, 0.20)" }}
+          >
             Built for Vinted sellers everywhere
           </p>
         </div>

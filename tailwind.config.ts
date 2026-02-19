@@ -19,9 +19,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["Sora", "system-ui", "sans-serif"],
-        body: ["DM Sans", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Menlo", "monospace"],
+        display: ["Sora", "sans-serif"],
+        body: ["DM Sans", "sans-serif"],
+        mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -62,10 +62,12 @@ export default {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          subtle: "hsl(var(--success-subtle))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          subtle: "hsl(var(--warning-subtle))",
         },
         gold: {
           DEFAULT: "hsl(var(--gold))",
@@ -83,19 +85,23 @@ export default {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-        xl: "calc(var(--radius) + 6px)",
-        "2xl": "calc(var(--radius) + 14px)",
+        sm: "var(--radius-sm)",
+        DEFAULT: "var(--radius-md)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+        "2xl": "calc(var(--radius-xl) + 6px)",
+        full: "var(--radius-full)",
       },
       boxShadow: {
+        xs: "var(--shadow-xs)",
         sm: "var(--shadow-sm)",
         DEFAULT: "var(--shadow-md)",
         md: "var(--shadow-md)",
         lg: "var(--shadow-lg)",
         xl: "var(--shadow-xl)",
         coral: "var(--shadow-coral)",
+        "coral-hover": "var(--shadow-coral-hover)",
       },
       keyframes: {
         "accordion-down": {
