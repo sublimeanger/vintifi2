@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ScrollReveal from "@/components/ScrollReveal";
 import { cn } from "@/lib/utils";
+import { useCreateCheckout } from "@/hooks/useStripe";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const tiers = [
   {
@@ -15,6 +18,7 @@ const tiers = [
     cta: "Get Started",
     ctaVariant: "outline" as const,
     popular: false,
+    tier: null,
     features: [
       "Your first item free",
       "Background removal",
@@ -32,6 +36,7 @@ const tiers = [
     cta: "Start Free Trial",
     ctaVariant: "default" as const,
     popular: true,
+    tier: "pro",
     features: [
       "50 credits / month",
       "AI model shots",
@@ -51,6 +56,7 @@ const tiers = [
     cta: "Start Free Trial",
     ctaVariant: "outline" as const,
     popular: false,
+    tier: "business",
     features: [
       "200 credits / month",
       "Everything in Pro",
@@ -108,19 +114,14 @@ const PricingSection: React.FC = () => {
           </div>
         </ScrollReveal>
 
-        {/* Cards — Pro is first on mobile (§8.2), middle on desktop */}
+        {/* Cards — Pro is first on mobile, middle on desktop */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          {/* Free — order-2 on mobile (behind Pro) */}
           <ScrollReveal delay={0} className="order-2 md:order-1">
             <TierCard tier={tiers[0]} annual={annual} />
           </ScrollReveal>
-
-          {/* Pro — order-1 on mobile (first) */}
           <ScrollReveal delay={0.08} className="order-1 md:order-2 md:-translate-y-2">
             <TierCard tier={tiers[1]} annual={annual} />
           </ScrollReveal>
-
-          {/* Business — order-3 on mobile */}
           <ScrollReveal delay={0.16} className="order-3 md:order-3">
             <TierCard tier={tiers[2]} annual={annual} />
           </ScrollReveal>
@@ -141,6 +142,21 @@ const PricingSection: React.FC = () => {
 
 function TierCard({ tier, annual }: { tier: (typeof tiers)[number]; annual: boolean }) {
   const price = annual ? tier.annualPrice : tier.monthlyPrice;
+  const checkout = useCreateCheckout();
+  const navigate = useNavigate();
+
+  async function handleCta() {
+    if (!tier.tier) {
+      // Free plan → go to sign up
+      navigate("/signup");
+      return;
+    }
+    try {
+      await checkout.mutateAsync({ type: "subscription", tier: tier.tier, annual });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open checkout — please try again");
+    }
+  }
 
   return (
     <div
@@ -151,7 +167,6 @@ function TierCard({ tier, annual }: { tier: (typeof tiers)[number]; annual: bool
           : "border-border shadow-sm hover:shadow-md"
       )}
     >
-      {/* Popular badge */}
       {tier.popular && (
         <div className="mb-4">
           <span
@@ -198,11 +213,13 @@ function TierCard({ tier, annual }: { tier: (typeof tiers)[number]; annual: bool
             ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-coral hover:shadow-coral-hover hover:-translate-y-0.5"
             : "border-border hover:bg-muted"
         )}
+        onClick={handleCta}
+        disabled={checkout.isPending}
       >
+        {checkout.isPending ? <Loader2 size={15} className="animate-spin mr-2" /> : null}
         {tier.cta}
       </Button>
 
-      {/* Features */}
       <ul className="space-y-3 flex-1">
         {tier.features.map((feature) => (
           <li key={feature} className="flex items-start gap-2.5">
