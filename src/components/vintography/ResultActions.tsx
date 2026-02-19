@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { Download, RotateCcw } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Download, RotateCcw, ArrowLeft } from "lucide-react";
+import { Link, NavigateFunction } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { VintographyState, VintographyAction } from "@/lib/vintography-state";
 
@@ -9,9 +9,12 @@ const MOCK_CREDITS = 47;
 interface ResultActionsProps {
   state: VintographyState;
   dispatch: React.Dispatch<VintographyAction>;
+  returnToWizard?: boolean;
+  photoIndex?: number;
+  navigate?: NavigateFunction;
 }
 
-export function ResultActions({ state, dispatch }: ResultActionsProps) {
+export function ResultActions({ state, dispatch, returnToWizard, photoIndex = 0, navigate }: ResultActionsProps) {
   const { resultPhotoUrl } = state;
   if (!resultPhotoUrl) return null;
 
@@ -20,6 +23,11 @@ export function ResultActions({ state, dispatch }: ResultActionsProps) {
   }
 
   function handleSave() {
+    if (returnToWizard && navigate) {
+      sessionStorage.setItem('vintifi_studio_result', JSON.stringify({ photoIndex, resultUrl: resultPhotoUrl }));
+      navigate('/sell');
+      return;
+    }
     console.log('[ResultActions] Save to Listing (stub)', resultPhotoUrl);
   }
 
@@ -36,7 +44,11 @@ export function ResultActions({ state, dispatch }: ResultActionsProps) {
           onClick={handleSave}
           className="flex-1 min-h-[44px] rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-primary"
         >
-          Save to Listing
+          {returnToWizard ? (
+            <><ArrowLeft size={15} />Return to Sell Wizard</>
+          ) : (
+            'Save to Listing'
+          )}
         </button>
         <button
           onClick={handleDownload}

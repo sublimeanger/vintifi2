@@ -1,5 +1,5 @@
 import { useReducer, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageTransition } from "@/components/app/PageTransition";
 import { UpgradeModal } from "@/components/app/UpgradeModal";
 import { PhotoCanvas } from "@/components/vintography/PhotoCanvas";
@@ -14,6 +14,10 @@ import { vintographyReducer, initialState } from "@/lib/vintography-state";
 export default function Vintography() {
   const [state, dispatch] = useReducer(vintographyReducer, initialState);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const returnToWizard = searchParams.get('returnToWizard') === '1';
+  const photoIndex = parseInt(searchParams.get('photoIndex') ?? '0', 10);
 
   // Handle deep links from Sell Wizard
   useEffect(() => {
@@ -67,7 +71,13 @@ export default function Vintography() {
         <div className="flex-1 space-y-4">
           <PhotoCanvas state={state} />
           {state.resultPhotoUrl && (
-            <ResultActions state={state} dispatch={dispatch} />
+            <ResultActions
+              state={state}
+              dispatch={dispatch}
+              returnToWizard={returnToWizard}
+              photoIndex={photoIndex}
+              navigate={navigate}
+            />
           )}
           <PreviousEdits onSelect={url => dispatch({ type: 'SET_PHOTO', url })} />
         </div>
@@ -85,7 +95,13 @@ export default function Vintography() {
 
           {state.resultPhotoUrl && (
             <div className="px-1">
-              <ResultActions state={state} dispatch={dispatch} />
+              <ResultActions
+                state={state}
+                dispatch={dispatch}
+                returnToWizard={returnToWizard}
+                photoIndex={photoIndex}
+                navigate={navigate}
+              />
             </div>
           )}
 
