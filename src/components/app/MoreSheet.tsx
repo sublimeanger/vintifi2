@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Sparkles, SlidersHorizontal, TrendingUp, Settings, LogOut } from "lucide-react";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const MORE_NAV = [
   { label: "Price Check", icon: Sparkles, to: "/price-check" },
@@ -16,6 +17,7 @@ interface MoreSheetProps {
 
 export function MoreSheet({ isOpen, onClose }: MoreSheetProps) {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   function handleNav(to: string) {
     onClose();
@@ -57,7 +59,7 @@ export function MoreSheet({ isOpen, onClose }: MoreSheetProps) {
         </button>
 
         <button
-          onClick={onClose}
+          onClick={() => { signOut(); onClose(); }}
           className={cn(itemClass, "text-destructive")}
           style={{ padding: "14px 20px" }}
         >

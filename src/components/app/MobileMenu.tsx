@@ -14,8 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ── Mock data ──────────────────────────────────────────────────────────────
-const MOCK_USER = { displayName: "Jamie", creditsRemaining: 47, creditsLimit: 50 };
+import { useAuth } from "@/contexts/AuthContext";
 
 const PRIMARY_LINKS = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
@@ -38,8 +37,10 @@ interface MobileMenuProps {
 export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { creditsRemaining, creditsLimit } = MOCK_USER;
-  const pct = Math.min(100, (creditsRemaining / creditsLimit) * 100);
+  const { profile, signOut } = useAuth();
+  const creditsRemaining = profile?.credits_balance ?? 0;
+  const creditsLimit = profile?.credits_monthly_allowance ?? 3;
+  const pct = Math.min(100, (creditsRemaining / Math.max(creditsLimit, 1)) * 100);
 
   function handleNav(to: string) {
     onClose();
@@ -152,7 +153,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   Settings
                 </button>
                 <button
-                  onClick={onClose}
+                  onClick={() => { signOut(); onClose(); }}
                   className="w-full flex items-center gap-3 py-2 text-sm text-muted-foreground hover:text-destructive transition-colors min-h-[44px]"
                 >
                   <LogOut size={18} />

@@ -9,15 +9,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ── Mock data (replace with real auth context in Phase 3) ──────────────────
-const MOCK_USER = {
-  displayName: "Jamie",
-  tierLabel: "Pro",
-  creditsRemaining: 47,
-  creditsLimit: 50,
-  isUnlimited: false,
-};
+import { useAuth } from "@/contexts/AuthContext";
 
 const PRIMARY_NAV = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
@@ -106,7 +98,15 @@ function CreditMeter({
 
 export function AppSidebar() {
   const location = useLocation();
-  const { displayName, tierLabel, creditsRemaining, creditsLimit, isUnlimited } = MOCK_USER;
+  const { profile, signOut } = useAuth();
+
+  const displayName = profile?.display_name ?? 'User';
+  const tierLabel = profile?.subscription_tier
+    ? profile.subscription_tier.charAt(0).toUpperCase() + profile.subscription_tier.slice(1)
+    : 'Free';
+  const creditsRemaining = profile?.credits_balance ?? 0;
+  const creditsLimit = profile?.credits_monthly_allowance ?? 3;
+  const isUnlimited = creditsRemaining >= 999999;
 
   return (
     <aside
@@ -205,7 +205,7 @@ export function AppSidebar() {
           <button
             className="p-1.5 rounded-md text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center"
             aria-label="Sign out"
-            onClick={() => console.log("sign out — wired in Phase 3")}
+            onClick={signOut}
           >
             <LogOut size={15} />
           </button>

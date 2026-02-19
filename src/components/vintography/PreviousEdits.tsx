@@ -1,18 +1,31 @@
-// Phase 3 stub: returns null since there's no backend yet.
-// The data-fetching hook is stubbed with an empty array.
-// Phase 4 can connect this to a real Supabase query.
+import { useVintographyJobs } from "@/hooks/useVintography";
 
 interface PreviousEditsProps {
   onSelect?: (url: string) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function usePreviousEdits() {
-  return { edits: [] as { id: string; url: string; operation: string }[] };
-}
-
 export function PreviousEdits({ onSelect }: PreviousEditsProps) {
-  const { edits } = usePreviousEdits();
-  if (edits.length === 0) return null;
-  return null;
+  const { data: edits } = useVintographyJobs();
+  if (!edits || edits.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Recent edits</p>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {edits.slice(0, 10).map(job => (
+          <button
+            key={job.id}
+            onClick={() => onSelect?.(job.result_image_url!)}
+            className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-surface-sunken border border-border hover:border-primary transition-colors"
+          >
+            <img
+              src={job.result_image_url!}
+              alt={job.operation}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link2, Plus, X, CheckCircle2, Loader2 } from "lucide-react";
 import type { SellWizardState, SellWizardAction } from "@/lib/sell-wizard-state";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StepAddItemProps {
   state: SellWizardState;
@@ -17,21 +18,8 @@ const CONDITIONS = [
   "Satisfactory",
 ];
 
-const MOCK_IMPORT = {
-  title: "Nike Air Max 90 White/Grey",
-  brand: "Nike",
-  category: "Shoes",
-  size: "UK 9 / EU 43",
-  condition: "Very good",
-  color: "White/Grey",
-  description: "Classic Nike Air Max 90 in white and grey. Worn a handful of times, in great condition. Some light sole wear but uppers are clean.",
-  originalPhotos: [
-    "https://picsum.photos/seed/shoe1/600/750",
-    "https://picsum.photos/seed/shoe2/600/750",
-    "https://picsum.photos/seed/shoe3/600/750",
-  ],
-  enhancedPhotos: [null, null, null],
-};
+
+
 
 export function StepAddItem({ state, dispatch, showValidation }: StepAddItemProps) {
   const { item, isImporting } = state;
@@ -55,13 +43,36 @@ export function StepAddItem({ state, dispatch, showValidation }: StepAddItemProp
   async function handleImport() {
     if (!importUrl.trim()) return;
     dispatch({ type: 'SET_IMPORT_LOADING', loading: true });
-    await new Promise(r => setTimeout(r, 1500));
-    dispatch({ type: 'SET_ITEM_DATA', payload: MOCK_IMPORT });
-    dispatch({ type: 'SET_IMPORT_LOADING', loading: false });
-    setImportSuccess(true);
-    setTimeout(() => {
-      photosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 200);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-vinted', {
+        body: { url: importUrl.trim() },
+      });
+      if (error || !data) throw new Error(error?.message ?? 'Import failed');
+      dispatch({
+        type: 'SET_ITEM_DATA',
+        payload: {
+          title: data.title ?? '',
+          brand: data.brand ?? '',
+          category: data.category ?? '',
+          size: data.size ?? '',
+          condition: data.condition ?? '',
+          color: data.colour ?? '',
+          description: data.description ?? '',
+          source_url: importUrl.trim(),
+          originalPhotos: Array.isArray(data.photos) ? data.photos : [],
+          enhancedPhotos: Array.isArray(data.photos) ? new Array(data.photos.length).fill(null) : [],
+        },
+      });
+      setImportSuccess(true);
+      setTimeout(() => {
+        photosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 200);
+    } catch (err) {
+      // Fallback: still show success with whatever scraped
+      setImportSuccess(false);
+    } finally {
+      dispatch({ type: 'SET_IMPORT_LOADING', loading: false });
+    }
   }
 
   function handleFileAdd(e: React.ChangeEvent<HTMLInputElement>) {
