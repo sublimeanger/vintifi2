@@ -1,6 +1,5 @@
 import { useReducer, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
 import { PageTransition } from "@/components/app/PageTransition";
 import { WizardProgress } from "@/components/sell/WizardProgress";
 import { WizardFooter } from "@/components/sell/WizardFooter";
@@ -16,14 +15,26 @@ import {
   sessionRecoveryInit,
   saveWizardSession,
 } from "@/lib/sell-wizard-state";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Sell() {
+  const { profile } = useAuth();
   const [state, dispatch] = useReducer(
     sellWizardReducer,
     initialWizardState,
     sessionRecoveryInit
   );
   const [showValidation, setShowValidation] = useState(false);
+
+  // Sync firstItemFree from real profile data once profile loads
+  useEffect(() => {
+    if (profile !== null) {
+      const firstItemFree = profile.first_item_pass_used === false;
+      if (state.firstItemFree !== firstItemFree) {
+        dispatch({ type: 'SET_FIRST_ITEM_FREE', value: firstItemFree });
+      }
+    }
+  }, [profile?.first_item_pass_used]);
 
   // Persist state to sessionStorage on every change
   useEffect(() => {
