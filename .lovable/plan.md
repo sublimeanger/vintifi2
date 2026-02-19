@@ -1,249 +1,251 @@
 
-# Phase 3: Photo Studio — Implementation Plan
+# Phase 4: Sell Wizard
 
-## Overview
+## What This Builds
 
-This replaces the 19-line stub `src/pages/Vintography.tsx` with a fully featured AI Photo Studio — Vintifi's hero feature. The build decomposes into approximately 17 focused files. No backend (Supabase) is required yet: the `processImage` function will be stubbed to simulate processing with a timeout and return the original image as the "result," allowing the full UI and pipeline to work end-to-end with mock data.
+The Sell Wizard is Vintifi's core conversion flow: a 5-step guided experience that takes a user from "I have an item" to a complete Vinted-Ready Pack (professional photos, optimised listing text, smart price recommendation). This replaces the 16-line stub at `src/pages/Sell.tsx`.
 
-The design system (Phase 1) and App Shell (Phase 2) are already in place. The `BottomSheet`, `UpgradeModal`, `BeforeAfterSlider`, `springs` motion config, and all CSS tokens are ready to use.
+**New step order (vs old):** Add Item → Photos → Optimise → Price → Pack
+
+All AI calls (optimise, price check) are **stubbed** with 2-second delays returning mock data — identical to how Phase 3 stubbed `processImage`. The Photo Studio deep-link return flow wires up to the existing `src/pages/Vintography.tsx` via `sessionStorage` handoff. No Supabase is required.
 
 ---
 
-## Architecture at a Glance
+## Architecture
 
 ```text
 src/
 ├── pages/
-│   └── Vintography.tsx              ← REPLACED (~200 lines, orchestration only)
+│   └── Sell.tsx                           ← REPLACED — now SellWizard orchestration
 │
-├── components/vintography/
-│   ├── PhotoCanvas.tsx              ← 3-state canvas (original / processing / result)
-│   ├── QuickPresets.tsx             ← Horizontal preset pills strip
-│   ├── OperationBar.tsx             ← Grid/scroll of 7 operation buttons
-│   ├── ConfigContainer.tsx          ← Responsive: inline panel (desktop) / BottomSheet (mobile)
-│   ├── OperationConfig.tsx          ← Routes to correct config component
-│   ├── PipelineStrip.tsx            ← Pipeline chain + AddEffectButton
-│   ├── GenerateButton.tsx           ← Sticky CTA with credit cost
-│   ├── ResultActions.tsx            ← Save / Download / Try Again
-│   ├── StudioEmptyState.tsx         ← Upload prompt when no photo loaded
-│   ├── PreviousEdits.tsx            ← Horizontal gallery (hidden when empty)
-│   └── configs/
-│       ├── shared.tsx               ← SegmentedControl + ThumbnailGrid primitives
-│       ├── SimpleConfig.tsx         ← Remove BG + Enhance (no config needed)
-│       ├── SteamConfig.tsx          ← Intensity segmented control
-│       ├── FlatLayConfig.tsx        ← 5-style visual thumbnail grid
-│       ├── LifestyleConfig.tsx      ← 16-scene thumbnail grid
-│       ├── MannequinConfig.tsx      ← Type + Lighting + Background
-│       └── ModelShotWizard.tsx      ← 3-step mini-wizard with horizontal slide
+├── components/sell/
+│   ├── WizardProgress.tsx                 ← 5-step progress bar (desktop + mobile)
+│   ├── WizardFooter.tsx                   ← Previous / Next buttons
+│   ├── FirstItemFreeBanner.tsx            ← Persistent "your first item is free" banner
+│   ├── MarketRangeBar.tsx                 ← Price range visualisation (gradient track)
+│   │
+│   └── steps/
+│       ├── StepAddItem.tsx                ← Step 1: Vinted URL import + manual form + photos
+│       ├── StepPhotos.tsx                 ← Step 2: Quick Remove BG + Photo Studio deep link
+│       ├── StepOptimise.tsx               ← Step 3: AI title/description/hashtags (editable)
+│       ├── StepPrice.tsx                  ← Step 4: Price check + strategy cards + manual override
+│       └── StepPack.tsx                   ← Step 5: Vinted-Ready Pack + copy + save
 │
 └── lib/
-    ├── vintography-state.ts         ← Types, reducer, action types, helpers
-    └── vintography-api.ts           ← processImage (stubbed for Phase 3)
+    └── sell-wizard-state.ts               ← Types, reducer, session recovery
 ```
 
----
-
-## Key Design Rules Enforced Throughout
-
-1. **Photo always visible** — Mobile canvas is `position: sticky; top: 56px` and never scrolls away
-2. **Generate button always reachable** — Sticky footer in desktop panel, pinned inside BottomSheet on mobile
-3. **Simple = two taps, complex = guided** — Remove BG/Enhance open a minimal `sm` drawer; AI Model Shot opens a 3-step wizard in an `lg` drawer
+**Modified files:**
+- `src/pages/Sell.tsx` — full replacement with wizard orchestration
+- `src/pages/Vintography.tsx` — add `returnToWizard` sessionStorage handoff in ResultActions
 
 ---
 
 ## Implementation Steps
 
-### Step 1 — State Foundation: `src/lib/vintography-state.ts`
+### Step 1 — State Layer: `src/lib/sell-wizard-state.ts`
 
-Create the complete reducer with all types and actions exactly as specced:
+Complete reducer with all types and actions from the spec:
 
-- **Types:** `Operation` (8 values), `OperationParams`, `PipelineStep`, `VintographyState`
-- **Actions:** 17 action types covering photo, pipeline, processing, drawer, wizard
-- **Reducer:** All 17 cases with correct state transitions
-- **Helpers:**
-  - `getDefaultParams(operation)` — sensible defaults per operation
-  - `getOperationCredits(operation)` — AI Model = 4 credits, others = 1
-  - `getPipelineCredits(pipeline)` — sum of all steps
-  - `AI_MODEL_CHAIN_ALLOWED`, `PRO_OPERATIONS`, `BUSINESS_OPERATIONS` constants
-- **Critical:** `isUnlimited` check is `>= 999999` (not 999)
+- **`WizardItem`** shape: title, description, brand, category, size, condition, color, source_url, originalPhotos[], enhancedPhotos[], optimisedTitle, optimisedDescription, hashtags[], suggestedPrice, priceRange, priceStrategy, chosenPrice
+- **`SellWizardState`**: currentStep (1–5), completedSteps[], direction, item, 5× loading booleans (isImporting, isProcessingPhotos, isOptimising, isPricing, isSaving), firstItemFree, error
+- **19 action types** covering navigation, item data, photos, optimisation, pricing, saving
+- **Session recovery** using `sessionStorage` key `vintifi_sell_wizard_v2` — restored on `useReducer` init, saved on every state change, cleared on "Save & Finish"
 
-### Step 2 — API Layer: `src/lib/vintography-api.ts`
+### Step 2 — Wizard Orchestration: `src/pages/Sell.tsx` (replace)
 
-Stubbed implementation that simulates a 2-second processing delay and returns the original image URL as the "result." This makes the full generate → result → before/after flow testable without a backend:
+The page component becomes the orchestration layer:
 
-```typescript
-export async function processImage(imageUrl, operation, params) {
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return { success: true, imageUrl }; // stub: returns original as result
-}
-```
+- `useReducer(sellWizardReducer, initialWizardState, sessionRecoveryInit)`
+- `useEffect` to save state to sessionStorage on every change
+- `useEffect` on mount to pick up `vintifi_studio_result` from sessionStorage (Photo Studio return)
+- Mock `firstItemFree = true` for Phase 4 (hardcoded, no Supabase yet) — shows the free banner throughout
+- `AnimatePresence mode="wait"` wrapping `renderStep()` — directional slide transitions (`x: ±30`) keyed by `currentStep`
+- Layout: `max-w-[680px] mx-auto px-4 py-6 lg:py-10`
+- Renders: `FirstItemFreeBanner` (if firstItemFree) → `WizardProgress` → animated step content → `WizardFooter` (except Step 2 which manages its own continue)
 
-The function signature is identical to what will be wired to a real Supabase Edge Function in a later phase.
+### Step 3 — `WizardProgress.tsx`
 
-### Step 3 — Shared Config Primitives: `src/components/vintography/configs/shared.tsx`
+Spec-faithful progress bar:
 
-Two reusable components used across multiple operation configs:
+- **Desktop (`sm:flex`):** 5 step nodes connected by animated fill-lines. Current step: coral `w-9 h-9` circle + `ring-4 hsla(350,80%,58%,0.15)` glow ring. Past steps: coral background + white `Check` icon. Future steps: `bg-surface-sunken border-border`. Connector lines: `bg-border` track + coral `motion.div` fill (`width: isPast ? '100%' : isCurrent ? '50%' : '0%'`, spring 100/20). Labels below each node.
+- **Mobile (`sm:hidden`):** Condensed dots — past/future are `w-2.5 h-2.5 rounded-full`, current is `w-8 h-2.5 rounded-full` (elongated pill). Active label shown below the pill only.
+- Steps are **not clickable** — linear wizard, no skipping.
 
-- **`SegmentedControl`** — iOS-style track with `bg-surface-sunken rounded-lg p-1`. Active segment: `bg-surface shadow-sm` (raised white pill). Props: `label`, `options[]`, `value`, `onChange`
-- **`ThumbnailGrid`** — Grid of colour-swatch tiles with label. Active tile: `border-primary bg-primary/5`. Props: `label`, `options[]`, `value`, `onChange`, `columns`
+### Step 4 — `WizardFooter.tsx`
 
-### Step 4 — Photo Canvas: `src/components/vintography/PhotoCanvas.tsx`
+Persistent bottom nav:
 
-Three mutually exclusive visual states driven by `state`:
+- `border-t border-border mt-10 pt-6 flex items-center justify-between`
+- **Previous** (Step > 1): ghost border button with `ArrowLeft`
+- **Next**: coral primary button. Disabled state: `bg-surface-sunken text-muted-foreground cursor-not-allowed`. Active: coral + `shadow-[0_4px_14px_hsla(350,80%,58%,0.3)] hover:-translate-y-0.5`
+- Step-specific labels: "Continue to Photos" / "Continue to Optimise" / "Continue to Pricing" / "See Your Listing Pack" / "Save & Finish ✓"
+- Loading state: `Loader2 animate-spin` + "Processing…"
+- Step 2 does NOT render `WizardFooter` — its continue button is embedded in `StepPhotos`
 
-**State 1 (original):** Simple `img` in a `rounded-xl bg-surface shadow-lg` container. `aspect-[4/5]` on mobile, `lg:aspect-auto lg:max-h-[calc(100vh-200px)]` on desktop.
+### Step 5 — `FirstItemFreeBanner.tsx`
 
-**State 2 (processing):** Same `img` with:
-- Inset `motion.div` breathing glow: `boxShadow` animates from `0 → inset 0 0 40px 8px hsla(350,80%,58%,0.1) → 0`, 2.5s repeat
-- Bottom-centre chip: `bg-secondary/80 backdrop-blur-lg rounded-full` with spinning `Loader2` + operation label + step counter `(1/3)`
+Shown when `firstItemFree === true` (mocked as `true` for Phase 4):
 
-**State 3 (result):** Spring-animated reveal (`scale 0.97 → 1`) wrapping the existing `BeforeAfterSlider` component from Phase 1, with `autoReveal={true}` and `aspectRatio="4/5"`.
+- `bg-gradient-to-r from-primary/8 via-primary/5 to-accent/8 border border-primary/15 rounded-xl px-5 py-3.5`
+- `Gift` icon in `w-8 h-8 rounded-lg bg-primary/10` container
+- Title: "Your first item is free ✨" + subtitle explaining the full wizard is covered
 
-**Mobile wrapper:** `sticky top-14 z-10 -mx-4 px-4 pb-3 bg-background` — bleeds to screen edges, stays below the 56px mobile header.
+### Step 6 — `StepAddItem.tsx`
 
-**Processing label helper:** `getProcessingLabel(operation)` maps all 8 operations to human-readable strings ("Removing background…", "Generating model shot…" etc.).
+Two-path item creation:
 
-### Step 5 — Operation Bar: `src/components/vintography/OperationBar.tsx`
+**URL Import card:**
+- `Link2` icon header + URL text input + "Import" button
+- On click: `SET_IMPORT_LOADING(true)` → 1.5s stub delay → dispatch `SET_ITEM_DATA` with mock populated data (Nike Air Max 90, brand, category, 3 mock photo URLs using `picsum.photos`) → `SET_IMPORT_LOADING(false)`
+- Import success banner: `bg-success/5 border-success/20`, shows item title + photo count
+- `autoScroll` to photo preview after success
 
-Defines the 7 operations array (id, label, icon, credits, tier). Uses these Lucide icons: `Eraser`, `ImageIcon`, `Sparkles`, `Wind`, `LayoutIcon`, `PersonStanding`, `UserCircle2`.
+**"or add manually" divider**
 
-**Rendering:**
-- Desktop: `grid grid-cols-4 gap-2 p-3` (2 rows, 4 columns)
-- Mobile: `flex gap-2 overflow-x-auto scrollbar-hide px-1 py-2`
+**Manual form fields** (all using `bg-surface-sunken border-border rounded-xl px-4 py-3`):
+- Title (text, required, max 100)
+- Brand (text, required)
+- Category (native `<select>` styled, required) — Tops, Bottoms, Dresses, Outerwear, Shoes, Accessories, Other
+- Size (text, required)
+- Condition (native `<select>`) — New with tags / New without tags / Very good / Good / Satisfactory
+- Colour (text, optional)
+- Description (textarea, optional)
 
-**OperationButton:** `min-w-[72px]` on mobile, flex-column layout with icon (20px) → label (11px) → credit cost (9px font-mono). Selected: `bg-primary/10 ring-2 ring-primary`. Locked: lock badge (`-top-1 -right-1 absolute`), 60% opacity. Tap unlocked → `SELECT_OPERATION`. Tap selected → `DESELECT_OPERATION`. Tap locked → open `UpgradeModal`.
+**Photo upload section:**
+- Horizontal scroll strip of 96×96 thumbnails with × remove button (visible on group-hover)
+- "Add" dashed-border tile with `Plus` icon — triggers `<input type="file" accept="image/*">` → creates `URL.createObjectURL` → dispatches `ADD_ORIGINAL_PHOTO`
+- Max 10 photos; counter "X / 10"
 
-Tier locking logic: Free tier has access to `clean_bg`, `lifestyle_bg`, `enhance`, `decrease`. Pro: adds `flatlay`, `mannequin`. Business: adds `ai_model`. For Phase 3, mock user tier is "Pro" (matching existing mock data in AppSidebar).
+**Validation:** "Continue to Photos" button disabled until title, brand, category, size, condition are filled AND at least 1 photo exists. When user taps Next with empty required fields, inline red validation hints appear below each empty field.
 
-### Step 6 — Quick Presets: `src/components/vintography/QuickPresets.tsx`
+### Step 7 — `StepPhotos.tsx`
 
-4 presets: Marketplace Ready (2cr, free), Editorial (1cr, pro), Quick Clean (1cr, free), Steam & List (2cr, free).
+Photo enhancement step:
 
-Horizontal scroll strip: `flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2`. Each pill: `rounded-full border px-4 py-2`. Active (pipeline matches preset): `bg-primary text-white border-primary`. Lock icon for pro-gated presets. Credit badge uses `font-mono text-[11px]`.
+**Per-photo card:**
+- Counter "Photo N of M" + "Enhanced ✓" badge (when processed)
+- `aspect-[4/5] rounded-xl overflow-hidden bg-surface-sunken` preview
+  - If enhanced: `BeforeAfterSlider` (already in codebase at `src/components/BeforeAfterSlider.tsx`) with `autoReveal={true}` and `aspectRatio="4/5"`
+  - If not enhanced: plain `<img>` of current photo
+- Action buttons (if not yet enhanced):
+  1. **Quick Remove Background** (coral primary) — calls `processImage(url, 'clean_bg', {})` from `src/lib/vintography-api.ts` (2s stub), dispatches `SET_ENHANCED_PHOTO`, auto-advances to next unenhanced photo. Credit badge hidden when `firstItemFree`.
+  2. **Open Photo Studio** (ghost border) — calls `navigate('/vintography?imageUrl=...&returnToWizard=1&photoIndex=N')`
+  3. **Skip this photo** (text link)
+- Action (if already enhanced): "Edit again in Photo Studio" ghost button
 
-`isPresetActive` checks if the current pipeline operations array exactly matches the preset steps array.
+**Photo strip thumbnail nav:**
+- `flex gap-2 justify-center` — 56×56 thumbs, `border-primary` on active, green `Check` badge overlay on enhanced, `ring-2 ring-success/30` on enhanced
 
-### Step 7 — Operation Configs (all in `configs/`)
+**Manual continue button** (always visible):
+- `"I've finished editing — continue →"` → dispatches `NEXT_STEP` directly (bypasses `WizardFooter`)
+- This step's footer button is intentionally NOT the standard `WizardFooter` Next button
 
-**`SimpleConfig.tsx`** — Title + description + italic tip text. No interactive controls. Drawer opens at `sm` height.
+**Local state:** `activePhotoIndex`, `skippedPhotos: Set<number>`
 
-**`SteamConfig.tsx`** — `SegmentedControl` for 3 intensity options (Light Press / Steam / Deep Press).
+### Step 8 — Photo Studio Return Flow
 
-**`FlatLayConfig.tsx`** — `grid grid-cols-3 gap-2`. 5 colour-swatch tiles (Clean White, With Accessories, Seasonal, Denim, Wood) using `ThumbnailGrid`.
+Modify `src/pages/Vintography.tsx`'s `ResultActions` to handle the `returnToWizard` param:
 
-**`LifestyleConfig.tsx`** — Same pattern as FlatLayConfig but 16 background scene swatches in `grid-cols-3`. Drawer height `md`.
+In `Vintography.tsx`, add a `useEffect` checking `searchParams.get('returnToWizard') === '1'`. Modify the existing `ResultActions` "Save to Listing" button: when `returnToWizard=1` is in the URL, it becomes "← Return to Sell Wizard" — clicking it stores `{ photoIndex, resultUrl }` to `sessionStorage.setItem('vintifi_studio_result', JSON.stringify(...))` then navigates to `/sell`.
 
-**`MannequinConfig.tsx`** — Three stacked sections: Type segmented control (4 options), Lighting segmented control (3 options), Background thumbnail grid (4 columns). Uses `SegmentedControl` + `ThumbnailGrid` from shared.
+In `Sell.tsx`, a `useEffect` on mount reads and clears `vintifi_studio_result` from sessionStorage and dispatches `SET_ENHANCED_PHOTO`.
 
-**`ModelShotWizard.tsx`** — 3-step wizard with `AnimatePresence mode="wait"` horizontal slide (`x: ±40`). Step indicator dots above title. Steps:
-- Step 1: Gender (2-col grid of large buttons) + Look (3-col grid, 6 numbered placeholders)
-- Step 2: Pose (2-col grid, 6 poses) + Background `ThumbnailGrid` (4 cols, 8 scenes)
-- Step 3: Summary card + Full garment `Switch` + garment description `textarea`
-- Next/Back buttons live INSIDE the config area. Generate button in footer only appears on step 3.
+### Step 9 — `StepOptimise.tsx`
 
-### Step 8 — Config Container: `src/components/vintography/ConfigContainer.tsx`
+AI listing optimisation:
 
-Responsive wrapper using `useMediaQuery('(min-width: 1024px)')`:
+**Before generation:** Full-width coral "Generate Optimised Listing" button with `Sparkles` icon. Credit badge shows "Free" when `firstItemFree`, else "1 cr".
 
-**Desktop:** `flex flex-col h-full` → scrollable config area (`flex-1 overflow-y-auto`) + sticky footer with gradient fade + `GenerateButton`
+**Loading:** Warm skeleton shimmer (`skeleton` class from Phase 2) for title bar (h-12), description block (h-32), 5 hashtag pill skeletons (h-8 w-20).
 
-**Mobile:** Uses `BottomSheet` from Phase 2 (`src/components/ui/BottomSheet.tsx`). `getDrawerHeight(operation)` maps operations to `sm / md / lg`. `isOpen={state.drawerOpen}` controlled by reducer. Dismiss calls `CLOSE_DRAWER`.
+**After generation** (stubbed after 2s with mock Nike listing):
+- Title: editable `<input>` with char counter `N / 100`
+- Description: editable `<textarea rows={5}>` with char counter `N / 500`
+- Hashtags: toggleable coral pills (`bg-primary/8 text-primary`, tap to remove via `TOGGLE_HASHTAG`)
+- "↻ Regenerate" text link re-runs the stub
+- All appears with spring fade-up animation (`y: 16 → 0`)
 
-### Step 9 — Generate Button: `src/components/vintography/GenerateButton.tsx`
+Results persist on back/forward navigation — already handled by reducer state.
 
-- Hidden when `activeStep?.operation === 'ai_model' && state.modelWizardStep < 3`
-- Disabled when: `pipeline.length === 0 || isProcessing`
-- Active: coral background with `shadow-[0_4px_14px_hsla(350,80%,58%,0.3)]`, lifts on hover `-translate-y-0.5`
-- Processing state: spinning `Loader2` + "Processing…"
-- Label: "✨ Generate · X credit(s)"
-- Credit cost updates in real-time as pipeline changes
+### Step 10 — `MarketRangeBar.tsx`
 
-For Phase 3 (no auth yet), uses mock credits from `MOCK_USER` (47 remaining). Always `canAfford = true` for Phase 3 since credits are mocked.
+Visual price range indicator:
 
-`handleGenerate` iterates the pipeline sequentially using `processImage`, dispatching `PROCESSING_STEP_COMPLETE` between steps and `PROCESSING_COMPLETE` / `PROCESSING_ERROR` at end.
+- `bg-surface rounded-xl border border-border p-5`
+- Price labels row: `£low / £median / £high` in `font-mono`
+- Gradient track `h-3`: `bg-gradient-to-r from-success/30 via-primary/30 to-accent/30 rounded-full`
+- Fixed dot markers at 0%, 50%, 100% for low (success), median (primary), high (accent)
+- **Animated chosen price dot** — `motion.div` with `animate={{ left: '{chosenPosition}%' }}`, spring 200/20. 24×24 dark circle with white inner dot
+- Low/Median/High labels below track
 
-### Step 10 — Pipeline Strip: `src/components/vintography/PipelineStrip.tsx`
+### Step 11 — `StepPrice.tsx`
 
-Renders below config options, above the generate footer:
+Price intelligence:
 
-- Pipeline pills with `pl-3 pr-1.5 py-1.5 rounded-full` — click to `SET_ACTIVE_STEP`, × to `REMOVE_PIPELINE_STEP`
-- Active pill: `bg-primary/10 border-primary text-primary`
-- Arrow `ChevronRight` (muted/30) between steps
-- Credit total: `font-mono text-xs` right-aligned
-- `AddEffectButton`: dashed-border button → inline popover listing available operations. Enforces: no duplicates, no AI Model in chain, AI Model can only be followed by `enhance` or `decrease`, max 4 steps
+**Before check:** Coral "Run Price Check" button with `TrendingUp` icon. Credit badge: "Free" or "1 cr".
 
-### Step 11 — Result Actions: `src/components/vintography/ResultActions.tsx`
+**Loading:** Skeleton for the range bar + 3 strategy cards.
 
-Appears with spring fade-up animation (delay 0.3s) after `state.resultPhotoUrl` is set:
+**After check** (stubbed mock: low £8, median £14, high £22):
+- `MarketRangeBar` with animated chosen-price indicator
+- Strategy cards grid (`grid-cols-3 gap-3`): Competitive / Balanced / Premium
+  - Each: icon (`Zap` / `Target` / `Crown`), `font-mono text-lg` price, label, sub-description
+  - Selected: `border-primary bg-primary/5`; tapping dispatches `SET_PRICE_STRATEGY` which also updates `chosenPrice`
+- Manual price override: `£` prefix + `type="number" step="0.01"` in `font-mono text-lg`, dispatches `SET_CHOSEN_PRICE`
+- "Balanced" selected by default (spec's `priceStrategy: 'balanced'` default in reducer)
 
-- Primary row: "Save to Listing" (coral, flex-1) + Download icon button
-- "Try a different effect" ghost button → `RESET`
-- Divider section: "Next photo" button (if `hasNextPhoto`), "← Return to Sell Wizard" link (if `returnToWizard` URL param), credits remaining counter with top-up link when ≤5
+### Step 12 — `StepPack.tsx`
 
-For Phase 3: Download uses `window.open(resultUrl)`. "Save to Listing" is a stub that logs to console.
+The triumph step — Vinted-Ready Pack:
 
-### Step 12 — Studio Empty State: `src/components/vintography/StudioEmptyState.tsx`
+**Hero:** `BeforeAfterSlider` for photo[0] before/after with `autoReveal={true}` + spring scale-in animation (0.97 → 1, delay 0.2s)
 
-Shown when `!state.originalPhotoUrl`:
+**Enhanced photo strip:** Horizontal scroll of 80×80 thumbnails + "Download all" text link (stubs to `window.open`)
 
-- 80×80 `rounded-3xl bg-primary/8` icon container with `Camera` (36px)
-- Headline + subtext
-- Drag-and-drop upload zone: `border-2 border-dashed border-border hover:border-primary rounded-2xl p-8`. `onDrop` reads the dropped file, creates `URL.createObjectURL(file)`, calls `onPhotoSelected(url)`
-- `<input type="file" accept="image/*">` for click-to-browse
-- "Choose from My Items" border button (stub: navigates to `/listings`)
-- Quick Start presets strip (first 3 presets shown as list items)
+**Copyable sections** (using internal `CopySection` sub-component):
+- Title, Description, Hashtags — each with label + "Copy ✓" button (2s feedback)
+- Price display: `font-mono text-2xl font-bold` with strategy label + copy icon
 
-### Step 13 — Previous Edits Gallery: `src/components/vintography/PreviousEdits.tsx`
+**Actions:**
+- "Copy All to Clipboard" — ghost border button, assembles multiline text (title + description + hashtags + price)
+- "Save & Finish ✓" — coral primary. On click: `SET_SAVING(true)` → 1.5s stub → `SET_SAVED('mock-listing-id')` → clears sessionStorage, shows `toast.success('Item saved!')` via Sonner
+- Saved state reveals "Ready to list more?" section: "Start another item →" (resets wizard + clears storage). Credits nudge (≤5 remaining) links to `/settings`.
 
-For Phase 3, this renders nothing (returns `null`) since there's no Supabase backend yet. The component accepts `onSelect` prop and the data-fetching hook is stubbed with an empty array. The gallery structure is wired up so Phase 4 can simply connect it to a real query.
+### Step 13 — Route Update: `src/App.tsx`
 
-### Step 14 — Main Page: `src/pages/Vintography.tsx`
-
-Replace the 19-line stub with the ~200-line orchestration component:
-
-- `useReducer(vintographyReducer, initialState)`
-- `useSearchParams` to handle `imageUrl` + `itemId` deep links
-- **Empty state branch:** if `!state.originalPhotoUrl` → render `StudioEmptyState`
-- **Main layout:**
-  ```
-  Desktop: flex gap-6 items-start
-    Left panel (400px, sticky top-8, max-h calc(100vh-64px)):
-      QuickPresets
-      OperationBar
-      flex-1 overflow-y-auto: ConfigContainer (desktop mode)
-    Right panel (flex-1):
-      PhotoCanvas (desktop: normal flow)
-      ResultActions (if resultPhotoUrl)
-      PreviousEdits
-  
-  Mobile:
-    PhotoCanvas (sticky top-14, -mx-4 bleed, bg-background backdrop)
-    QuickPresets
-    OperationBar
-    ResultActions (if resultPhotoUrl)
-    PreviousEdits
-    ConfigContainer (BottomSheet drawer, outside flex layout)
-  ```
-
----
-
-## What is NOT in Scope for Phase 3
-
-- Real Supabase backend / Edge Function (processImage is stubbed)
-- Real credit deduction (mock credits used)
-- "Save to Listing" backend integration (console.log stub)
-- PreviousEdits data fetching (empty/null render)
-- Authentication / ProtectedRoute guard (Phase 4)
-- Deep links from Sell Wizard (`itemId`, `returnToWizard` wired but stub)
+The existing `/sell` route already points to `Sell.tsx` inside `AppShell`. No route changes needed — just the page replacement. The wizard's narrow `max-w-[680px]` content sits within AppShell's existing `max-w-7xl` container, centred naturally.
 
 ---
+
+## Key Spec Details Honoured
+
+- Session key `vintifi_sell_wizard_v2` prevents conflicts with any hypothetical old state
+- `firstItemFree` is hardcoded `true` for Phase 4 (no Supabase) — shows banner + hides credit badges
+- Step 2 has its own continue button — `WizardFooter` is not rendered for step 2
+- Validation on Step 1 shows inline hints only after the user attempts to proceed (not eagerly)
+- All AI stubs use the same 2s delay pattern established in Phase 3
+- Photo Studio return: `sessionStorage.setItem('vintifi_studio_result', ...)` → wizard picks it up on mount
+- `BeforeAfterSlider` reused as-is from Phase 1 (already in codebase)
+- `processImage` reused from `src/lib/vintography-api.ts` (Phase 3 stub) for Quick Remove BG
+- All prices in `font-mono`; headings in Sora (`font-display`); body in DM Sans (`font-body`)
+- Touch targets ≥ 44px on all interactive elements
+
+## What is NOT in Scope for Phase 4
+
+- Real Supabase calls (no `optimize-listing` or `price-check` edge functions yet)
+- Real credit deduction (all mocked as free or stubbed)
+- Real Vinted URL scraping (import stub returns hardcoded mock data)
+- Real listings table save (stubbed with timeout + mock ID)
+- Authentication / real user ID
+- `PreviousEdits` gallery connection to Phase 4 listings
 
 ## File Count
 
-17 new/modified files:
-- 1 updated page (`Vintography.tsx`)
-- 10 new components (`PhotoCanvas`, `QuickPresets`, `OperationBar`, `ConfigContainer`, `OperationConfig`, `PipelineStrip`, `GenerateButton`, `ResultActions`, `StudioEmptyState`, `PreviousEdits`)
-- 6 config sub-components (`shared`, `SimpleConfig`, `SteamConfig`, `FlatLayConfig`, `LifestyleConfig`, `MannequinConfig`, `ModelShotWizard` — actually 7 files)
-- 2 new lib files (`vintography-state.ts`, `vintography-api.ts`)
+- 1 modified page (`src/pages/Sell.tsx` — full replacement)
+- 1 modified component (`src/pages/Vintography.tsx` — add `returnToWizard` handler in ResultActions)
+- 1 new lib file (`src/lib/sell-wizard-state.ts`)
+- 5 new step components (`StepAddItem`, `StepPhotos`, `StepOptimise`, `StepPrice`, `StepPack`)
+- 4 new shared components (`WizardProgress`, `WizardFooter`, `FirstItemFreeBanner`, `MarketRangeBar`)
 
-The existing `BeforeAfterSlider`, `BottomSheet`, `UpgradeModal`, and all CSS design tokens are used as-is with no modifications.
+**Total: 11 files**
