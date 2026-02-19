@@ -64,6 +64,7 @@ export type SellWizardAction =
   | { type: 'SET_SAVING'; loading: boolean }
   | { type: 'SET_SAVED'; listingId: string }
   | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'SET_FIRST_ITEM_FREE'; value: boolean }
   | { type: 'RESET' };
 
 // ─── Initial State ────────────────────────────────────────────────────────────
@@ -256,6 +257,8 @@ export function sellWizardReducer(
       return { ...state, isSaving: false, savedListingId: action.listingId };
     case 'SET_ERROR':
       return { ...state, error: action.error };
+    case 'SET_FIRST_ITEM_FREE':
+      return { ...state, firstItemFree: action.value };
     case 'RESET':
       return { ...initialWizardState };
     default:

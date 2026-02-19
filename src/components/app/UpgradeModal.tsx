@@ -1,6 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap } from "lucide-react";
+import { X, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCreateCheckout } from "@/hooks/useStripe";
+import { toast } from "sonner";
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -8,6 +10,24 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
+  const checkout = useCreateCheckout();
+
+  async function handleStartTrial() {
+    try {
+      await checkout.mutateAsync({ type: 'subscription', tier: 'pro', annual: false });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open checkout — please try again');
+    }
+  }
+
+  async function handleTopUp() {
+    try {
+      await checkout.mutateAsync({ type: 'credit_pack', pack: '10' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open checkout — please try again');
+    }
+  }
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -75,10 +95,22 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
 
               {/* CTAs */}
               <div className="px-6 pb-6 space-y-2">
-                <Button className="w-full min-h-[44px] bg-primary hover:bg-primary/90">
+                <Button
+                  className="w-full min-h-[44px] bg-primary hover:bg-primary/90"
+                  onClick={handleStartTrial}
+                  disabled={checkout.isPending}
+                >
+                  {checkout.isPending ? (
+                    <Loader2 size={15} className="animate-spin mr-2" />
+                  ) : null}
                   Start 7-Day Free Trial
                 </Button>
-                <Button variant="ghost" className="w-full min-h-[44px] text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  className="w-full min-h-[44px] text-muted-foreground"
+                  onClick={handleTopUp}
+                  disabled={checkout.isPending}
+                >
                   Top up credits
                 </Button>
               </div>

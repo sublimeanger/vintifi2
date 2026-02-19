@@ -4,13 +4,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MarketRangeBar } from "@/components/sell/MarketRangeBar";
 import type { SellWizardState, SellWizardAction, PriceStrategy } from "@/lib/sell-wizard-state";
 import { usePriceCheck } from "@/hooks/usePriceCheck";
+import { toast } from "sonner";
 
 interface StepPriceProps {
   state: SellWizardState;
   dispatch: React.Dispatch<SellWizardAction>;
 }
-
-const MOCK_RANGE = { low: 8, median: 14, high: 22 };
 
 const STRATEGIES: { id: PriceStrategy; label: string; icon: React.ReactNode; desc: string }[] = [
   {
@@ -36,16 +35,35 @@ const STRATEGIES: { id: PriceStrategy; label: string; icon: React.ReactNode; des
 export function StepPrice({ state, dispatch }: StepPriceProps) {
   const { item, isPricing, firstItemFree } = state;
   const hasData = !!item.priceRange;
+  const priceCheck = usePriceCheck();
 
   async function runPriceCheck() {
     dispatch({ type: 'SET_PRICING', loading: true });
-    await new Promise(r => setTimeout(r, 2000));
-    dispatch({
-      type: 'SET_PRICE_DATA',
-      priceRange: MOCK_RANGE,
-      suggestedPrice: MOCK_RANGE.median,
-    });
-    dispatch({ type: 'SET_PRICING', loading: false });
+    try {
+      const result = await priceCheck.mutateAsync({
+        title: item.title,
+        brand: item.brand,
+        category: item.category,
+        condition: item.condition,
+        size: item.size,
+        url: item.source_url || undefined,
+      });
+
+      const low = result.priceRange?.low ?? result.price_range_low ?? 0;
+      const median = result.priceRange?.median ?? result.price_range_median ?? 0;
+      const high = result.priceRange?.high ?? result.price_range_high ?? 0;
+
+      dispatch({
+        type: 'SET_PRICE_DATA',
+        priceRange: { low, median, high },
+        suggestedPrice: result.suggestedPrice ?? result.suggested_price ?? median,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Price check failed — please try again');
+      dispatch({ type: 'SET_PRICING', loading: false });
+    } finally {
+      dispatch({ type: 'SET_PRICING', loading: false });
+    }
   }
 
   const strategyPrice = (s: PriceStrategy) => {
