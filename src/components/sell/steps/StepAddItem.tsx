@@ -1,7 +1,10 @@
 import { useRef, useState } from "react";
 import { Link2, Plus, X, CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import type { SellWizardState, SellWizardAction } from "@/lib/sell-wizard-state";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadImage } from "@/lib/upload";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StepAddItemProps {
   state: SellWizardState;
@@ -25,8 +28,10 @@ export function StepAddItem({ state, dispatch, showValidation }: StepAddItemProp
   const { item, isImporting } = state;
   const [importUrl, setImportUrl] = useState("");
   const [importSuccess, setImportSuccess] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   const fieldClass = "w-full bg-surface-sunken border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors";
   const errorClass = "text-xs text-destructive mt-1";
@@ -68,20 +73,27 @@ export function StepAddItem({ state, dispatch, showValidation }: StepAddItemProp
         photosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 200);
     } catch (err) {
-      // Fallback: still show success with whatever scraped
-      setImportSuccess(false);
+      toast.error('Could not import from Vinted — try pasting the details manually');
     } finally {
       dispatch({ type: 'SET_IMPORT_LOADING', loading: false });
     }
   }
 
-  function handleFileAdd(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileAdd(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    files.forEach(file => {
-      const url = URL.createObjectURL(file);
-      dispatch({ type: 'ADD_ORIGINAL_PHOTO', url });
-    });
     e.target.value = '';
+    if (!files.length || !user) return;
+    setUploading(true);
+    try {
+      await Promise.all(files.map(async file => {
+        const url = await uploadImage(file, 'listing-images', user.id);
+        dispatch({ type: 'ADD_ORIGINAL_PHOTO', url });
+      }));
+    } catch {
+      toast.error('Photo upload failed — please try again');
+    } finally {
+      setUploading(false);
+    }
   }
 
   const updateItem = (field: string, value: string) => {
@@ -251,10 +263,11 @@ export function StepAddItem({ state, dispatch, showValidation }: StepAddItemProp
           {item.originalPhotos.length < 10 && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex-shrink-0 w-24 h-24 rounded-xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 transition-colors"
+              disabled={uploading}
+              className="flex-shrink-0 w-24 h-24 rounded-xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
             >
-              <Plus size={20} className="text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground">Add</span>
+              {uploading ? <Loader2 size={18} className="text-muted-foreground animate-spin" /> : <Plus size={20} className="text-muted-foreground" />}
+              <span className="text-[10px] text-muted-foreground">{uploading ? "Uploading…" : "Add"}</span>
             </button>
           )}
         </div>

@@ -13,6 +13,7 @@ interface WizardFooterProps {
   onPrev: () => void;
   nextDisabled?: boolean;
   isLoading?: boolean;
+  backOnly?: boolean;
 }
 
 export function WizardFooter({
@@ -21,6 +22,7 @@ export function WizardFooter({
   onPrev,
   nextDisabled = false,
   isLoading = false,
+  backOnly = false,
 }: WizardFooterProps) {
   const label = NEXT_LABELS[currentStep] ?? "Continue";
 
@@ -40,25 +42,27 @@ export function WizardFooter({
         <div />
       )}
 
-      {/* Next */}
-      <button
-        onClick={onNext}
-        disabled={nextDisabled || isLoading}
-        className={`min-h-[44px] px-6 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all ${
-          nextDisabled || isLoading
-            ? "bg-surface-sunken text-muted-foreground cursor-not-allowed"
-            : "bg-primary text-primary-foreground shadow-[0_4px_14px_hsla(350,80%,58%,0.3)] hover:-translate-y-0.5 hover:bg-primary/90"
-        }`}
-      >
-        {isLoading ? (
-          <>
-            <Loader2 size={15} className="animate-spin" />
-            Processing…
-          </>
-        ) : (
-          label
-        )}
-      </button>
+      {/* Next — hidden in backOnly mode */}
+      {!backOnly && (
+        <button
+          onClick={onNext}
+          disabled={nextDisabled || isLoading}
+          className={`min-h-[44px] px-6 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all ${
+            nextDisabled || isLoading
+              ? "bg-surface-sunken text-muted-foreground cursor-not-allowed"
+              : "bg-primary text-primary-foreground shadow-[0_4px_14px_hsla(350,80%,58%,0.3)] hover:-translate-y-0.5 hover:bg-primary/90"
+          }`}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Processing…
+            </>
+          ) : (
+            label
+          )}
+        </button>
+      )}
     </div>
   );
 }

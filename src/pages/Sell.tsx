@@ -168,16 +168,16 @@ export default function Sell() {
             isLoading={isLoading}
           />
         )}
-        {/* Step 5 still needs a Previous button */}
+        {/* Step 5 back button via WizardFooter in back-only mode */}
         {currentStep === 5 && (
-          <div className="border-t border-border mt-10 pt-6">
-            <button
-              onClick={handlePrev}
-              className="min-h-[44px] px-5 rounded-xl border border-border text-sm font-medium text-foreground flex items-center gap-2 hover:bg-surface-sunken transition-colors"
-            >
-              ← Back
-            </button>
-          </div>
+          <WizardFooter
+            currentStep={currentStep}
+            onNext={() => {}}
+            onPrev={handlePrev}
+            nextDisabled={true}
+            isLoading={false}
+            backOnly={true}
+          />
         )}
       </div>
     </PageTransition>

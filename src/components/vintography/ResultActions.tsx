@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Download, RotateCcw, ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 import { Link, NavigateFunction } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { VintographyState, VintographyAction } from "@/lib/vintography-state";
@@ -29,7 +30,8 @@ export function ResultActions({ state, dispatch, returnToWizard, photoIndex = 0,
       navigate('/sell');
       return;
     }
-    // Save to listing — feature coming soon
+    // Not in wizard context — prompt to download
+    toast.info('Download the image above, then attach it to your listing on Vinted.');
   }
 
   return (

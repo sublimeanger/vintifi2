@@ -1,7 +1,10 @@
-import { useRef } from "react";
-import { Camera, Upload, Package } from "lucide-react";
+import { useRef, useState } from "react";
+import { Camera, Upload, Package, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import type { VintographyAction } from "@/lib/vintography-state";
+import { uploadImage } from "@/lib/upload";
+import { useAuth } from "@/contexts/AuthContext";
 
 const QUICK_PRESETS = [
   { label: 'Marketplace Ready', desc: 'Remove BG + Enhance', credits: 2 },
@@ -16,10 +19,20 @@ interface StudioEmptyStateProps {
 export function StudioEmptyState({ dispatch }: StudioEmptyStateProps) {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const { user } = useAuth();
 
-  function handleFile(file: File) {
-    const url = URL.createObjectURL(file);
-    dispatch({ type: 'SET_PHOTO', url });
+  async function handleFile(file: File) {
+    if (!user) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, 'user-uploads', user.id);
+      dispatch({ type: 'SET_PHOTO', url });
+    } catch {
+      toast.error('Upload failed — please try again');
+    } finally {
+      setUploading(false);
+    }
   }
 
   function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -56,13 +69,19 @@ export function StudioEmptyState({ dispatch }: StudioEmptyStateProps) {
 
       {/* Drop zone */}
       <div
-        className="border-2 border-dashed border-border hover:border-primary rounded-2xl p-8 text-center cursor-pointer transition-colors"
+        className={`border-2 border-dashed border-border hover:border-primary rounded-2xl p-8 text-center cursor-pointer transition-colors ${uploading ? 'opacity-60 pointer-events-none' : ''}`}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        onClick={() => fileRef.current?.click()}
+        onClick={() => !uploading && fileRef.current?.click()}
       >
-        <Upload size={28} className="mx-auto mb-3 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Drop your photo here</p>
+        {uploading ? (
+          <Loader2 size={28} className="mx-auto mb-3 text-primary animate-spin" />
+        ) : (
+          <Upload size={28} className="mx-auto mb-3 text-muted-foreground" />
+        )}
+        <p className="text-sm font-medium text-foreground">
+          {uploading ? 'Uploading…' : 'Drop your photo here'}
+        </p>
         <p className="text-xs text-muted-foreground mt-1">or click to browse · JPG, PNG, WEBP</p>
         <input
           ref={fileRef}

@@ -61,7 +61,6 @@ export function StepPrice({ state, dispatch }: StepPriceProps) {
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Price check failed — please try again');
-      dispatch({ type: 'SET_PRICING', loading: false });
     } finally {
       dispatch({ type: 'SET_PRICING', loading: false });
     }

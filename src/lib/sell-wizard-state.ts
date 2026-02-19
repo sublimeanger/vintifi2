@@ -99,7 +99,7 @@ export const initialWizardState: SellWizardState = {
   isOptimising: false,
   isPricing: false,
   isSaving: false,
-  firstItemFree: true, // hardcoded for Phase 4
+  firstItemFree: false,
   error: null,
   savedListingId: null,
 };

@@ -135,7 +135,19 @@ export function StepPack({ state, dispatch }: StepPackProps) {
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-foreground">All photos</span>
             <button
-              onClick={() => window.open(item.enhancedPhotos[0] ?? item.originalPhotos[0], '_blank')}
+              onClick={() => {
+                const photos = item.enhancedPhotos.length > 0
+                  ? item.enhancedPhotos.map((e, i) => e ?? item.originalPhotos[i])
+                  : item.originalPhotos;
+                photos.filter(Boolean).forEach((url, i) => {
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `photo-${i + 1}.jpg`;
+                  a.target = '_blank';
+                  a.rel = 'noopener';
+                  a.click();
+                });
+              }}
               className="text-xs text-primary hover:underline"
             >
               Download all

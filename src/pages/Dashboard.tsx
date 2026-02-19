@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PageTransition } from "@/components/app/PageTransition";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,10 +9,13 @@ import { StatCards } from "@/components/dashboard/StatCards";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentItems } from "@/components/dashboard/RecentItems";
 import { NewUserDashboard } from "@/components/dashboard/NewUserDashboard";
+import { CreditExhaustedCard } from "@/components/app/CreditExhaustedCard";
+import { UpgradeModal } from "@/components/app/UpgradeModal";
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const { data: listings, isLoading } = useListings();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   if (isLoading || !profile) {
     return (
@@ -50,6 +54,14 @@ export default function Dashboard() {
     <PageTransition>
       <DashboardGreeting itemCount={items.length} />
 
+      {profile.credits_balance === 0 && (
+        <CreditExhaustedCard
+          className="mb-4"
+          onTopUp={() => setUpgradeOpen(true)}
+          onUpgrade={() => setUpgradeOpen(true)}
+        />
+      )}
+
       <MilestoneBanner
         firstItemFreeUsed={profile.first_item_pass_used}
         creditsBalance={profile.credits_balance}
@@ -66,6 +78,8 @@ export default function Dashboard() {
       <QuickActions />
 
       <RecentItems listings={items} />
+
+      <UpgradeModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </PageTransition>
   );
 }
