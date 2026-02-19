@@ -11,55 +11,59 @@ const HeroSection: React.FC = () => {
   };
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center pt-20 pb-12 px-4 bg-gradient-hero overflow-hidden">
-      {/* Subtle radial glow behind headline */}
+    <section className="relative min-h-screen flex flex-col items-center justify-center pt-20 pb-16 px-4 bg-gradient-hero overflow-hidden">
+      {/* Radial coral glow behind headline (§7.3) */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute pointer-events-none z-0"
         style={{
-          background:
-            "radial-gradient(ellipse 60% 40% at 50% 30%, hsl(350 80% 58% / 0.07) 0%, transparent 70%)",
+          top: "-200px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "800px",
+          height: "600px",
+          background: "radial-gradient(ellipse at center, hsla(350, 80%, 58%, 0.06) 0%, transparent 70%)",
         }}
       />
 
       <motion.div
-        className="relative z-10 flex flex-col items-center text-center max-w-4xl mx-auto"
-        variants={containerVariants(0.12)}
+        className="relative z-10 flex flex-col items-center text-center max-w-4xl mx-auto w-full"
+        variants={containerVariants(0.1)}
         initial="hidden"
         animate="visible"
       >
-        {/* Eyebrow */}
+        {/* Eyebrow tag */}
         <motion.div variants={fadeUpVariants(0)}>
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-body font-medium mb-6 border border-primary/20">
             ✦ Built for Vinted sellers
           </span>
         </motion.div>
 
-        {/* Headline */}
+        {/* Headline — delay 0ms (§7.3 entrance sequence) */}
         <motion.h1
-          className="text-hero font-display font-extrabold text-foreground mb-5"
-          variants={fadeUpVariants(0.08)}
+          className="text-hero font-display font-extrabold text-foreground mb-5 max-w-3xl"
+          variants={fadeUpVariants(0)}
         >
           Turn phone photos
           <br />
           <span className="text-primary">into sales.</span>
         </motion.h1>
 
-        {/* Subheadline */}
+        {/* Subheadline — delay 100ms */}
         <motion.p
-          className="text-lg md:text-xl font-body text-muted-foreground max-w-lg mb-8 leading-relaxed"
-          variants={fadeUpVariants(0.16)}
+          className="text-lg md:text-[1.125rem] font-body font-normal text-muted-foreground max-w-xl mb-8 leading-relaxed"
+          variants={fadeUpVariants(0.1)}
         >
-          AI-powered photo editing and smart listings for Vinted sellers. Professional results in seconds — no design skills needed.
+          AI photo studio + listing tools for Vinted sellers.
         </motion.p>
 
-        {/* CTA buttons */}
+        {/* CTA buttons — delay 200ms */}
         <motion.div
-          className="flex flex-col sm:flex-row items-center gap-3 mb-14"
-          variants={fadeUpVariants(0.24)}
+          className="flex flex-col sm:flex-row items-center gap-3 mb-3"
+          variants={fadeUpVariants(0.2)}
         >
           <Button
             size="lg"
-            className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-body font-semibold px-8 rounded-full shadow-coral h-12 text-base"
+            className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-body font-semibold px-8 rounded-full shadow-coral hover:shadow-coral-hover hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 h-12 text-[15px]"
             onClick={() => scrollTo("#pricing")}
           >
             Get Started Free
@@ -67,29 +71,41 @@ const HeroSection: React.FC = () => {
           <Button
             size="lg"
             variant="outline"
-            className="w-full sm:w-auto border-border font-body font-medium px-8 rounded-full h-12 text-base hover:bg-accent"
+            className="w-full sm:w-auto border-border font-body font-medium px-8 rounded-full h-12 text-[15px] hover:bg-muted hover:border-border-hover transition-all duration-200"
             onClick={() => scrollTo("#how-it-works")}
           >
             See How It Works ↓
           </Button>
         </motion.div>
 
-        {/* Hero BeforeAfterSlider */}
+        {/* Caption below CTAs */}
+        <motion.p
+          className="text-xs font-body text-muted-foreground/70 mb-12"
+          variants={fadeUpVariants(0.2)}
+        >
+          No credit card required · Your first item is free
+        </motion.p>
+
+        {/* Before/After Comparison — delay 400ms, aspect 16:9 */}
         <motion.div
-          className="w-full max-w-2xl"
-          variants={fadeUpVariants(0.36)}
+          className="w-full max-w-3xl"
+          variants={fadeUpVariants(0.4)}
         >
           <BeforeAfterSlider
             beforeLabel="Original Photo"
             afterLabel="Vintifi Enhanced"
-            beforeGradient="linear-gradient(145deg, hsl(220 15% 30%) 0%, hsl(220 10% 20%) 100%)"
-            afterGradient="linear-gradient(145deg, hsl(30 70% 92%) 0%, hsl(350 50% 90%) 50%, hsl(280 40% 92%) 100%)"
-            className="aspect-[4/3] w-full shadow-xl"
+            beforeGradient="linear-gradient(145deg, hsl(220 15% 28%) 0%, hsl(215 10% 18%) 100%)"
+            afterGradient="linear-gradient(145deg, hsl(30 60% 95%) 0%, hsl(350 40% 93%) 50%, hsl(280 30% 95%) 100%)"
+            className="aspect-video w-full shadow-xl"
             autoReveal
             autoRevealDelay={800}
           />
-          <p className="mt-3 text-xs font-mono text-muted-foreground text-center tracking-wider uppercase">
-            Drag slider · Placeholder images shown — real photos coming soon
+          {/* Subtext below comparison (§7.3) */}
+          <p className="mt-4 text-base font-body font-medium italic text-muted-foreground text-center">
+            "Your phone camera is enough."
+          </p>
+          <p className="mt-1 text-xs font-mono text-muted-foreground/50 text-center tracking-wider uppercase">
+            Drag slider to compare · Placeholder gradients — real photos coming soon
           </p>
         </motion.div>
       </motion.div>

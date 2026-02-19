@@ -10,28 +10,31 @@ const tiers = [
     name: "Free",
     monthlyPrice: 0,
     annualPrice: 0,
+    priceSuffix: "forever",
     description: "Perfect to get started",
-    cta: "Start for Free",
+    cta: "Get Started",
     ctaVariant: "outline" as const,
     popular: false,
     features: [
-      "5 photo edits per month",
+      "Your first item free",
       "Background removal",
       "Basic listing description",
       "Vinted price check (3/mo)",
+      "Standard processing speed",
     ],
   },
   {
     name: "Pro",
     monthlyPrice: 9.99,
     annualPrice: 7.99,
+    priceSuffix: "/month",
     description: "For active Vinted sellers",
-    cta: "Start Pro Free",
+    cta: "Start Free Trial",
     ctaVariant: "default" as const,
     popular: true,
     features: [
-      "Unlimited photo edits",
-      "AI Model shots",
+      "50 credits / month",
+      "AI model shots",
       "Flat-lay styling",
       "Smart descriptions (unlimited)",
       "Price Intelligence",
@@ -43,11 +46,13 @@ const tiers = [
     name: "Business",
     monthlyPrice: 24.99,
     annualPrice: 19.99,
+    priceSuffix: "/month",
     description: "For power sellers & resellers",
-    cta: "Start Business Free",
+    cta: "Start Free Trial",
     ctaVariant: "outline" as const,
     popular: false,
     features: [
+      "200 credits / month",
       "Everything in Pro",
       "Bulk photo processing",
       "CSV listing export",
@@ -62,24 +67,27 @@ const PricingSection: React.FC = () => {
   const [annual, setAnnual] = useState(false);
 
   return (
-    <section id="pricing" className="py-20 md:py-28 bg-secondary/40">
+    <section id="pricing" className="py-20 md:py-28" style={{ background: "hsl(var(--surface-sunken))" }}>
       <div className="container">
         <ScrollReveal className="text-center mb-12">
           <h2 className="text-section font-display font-bold text-foreground mb-4">
             Simple pricing. Start free.
           </h2>
-          <p className="text-base font-body text-muted-foreground max-w-md mx-auto mb-8">
-            No credit card required. Upgrade anytime. Top up anytime from £2.99.
+          <p className="text-[1.125rem] font-body text-muted-foreground max-w-md mx-auto mb-8">
+            Your first item is completely on us. No card required.
           </p>
 
-          {/* Toggle */}
-          <div className="inline-flex items-center gap-3 bg-secondary rounded-full p-1">
+          {/* Monthly / Annual toggle */}
+          <div
+            className="inline-flex items-center gap-1 rounded-full p-1"
+            style={{ background: "hsl(var(--border))" }}
+          >
             <button
               onClick={() => setAnnual(false)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-sm font-body font-medium transition-all",
+                "px-4 py-1.5 rounded-full text-sm font-body font-medium transition-all duration-200",
                 !annual
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -88,9 +96,9 @@ const PricingSection: React.FC = () => {
             <button
               onClick={() => setAnnual(true)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-sm font-body font-medium transition-all",
+                "px-4 py-1.5 rounded-full text-sm font-body font-medium transition-all duration-200",
                 annual
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -100,92 +108,111 @@ const PricingSection: React.FC = () => {
           </div>
         </ScrollReveal>
 
+        {/* Cards — Pro is first on mobile (§8.2), middle on desktop */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          {tiers.map((tier, i) => (
-            <ScrollReveal
-              key={tier.name}
-              delay={i * 0.08}
-              className={cn(tier.popular && "md:-translate-y-2")}
-            >
-              <div
-                className={cn(
-                  "rounded-2xl border p-6 md:p-8 bg-card transition-all duration-300 hover:shadow-lg h-full flex flex-col",
-                  tier.popular
-                    ? "border-primary shadow-coral ring-1 ring-primary/30"
-                    : "border-border shadow-md"
-                )}
-              >
-                {/* Popular badge */}
-                {tier.popular && (
-                  <div className="mb-4">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-body font-semibold">
-                      ✦ Most Popular
-                    </span>
-                  </div>
-                )}
+          {/* Free — order-2 on mobile (behind Pro) */}
+          <ScrollReveal delay={0} className="order-2 md:order-1">
+            <TierCard tier={tiers[0]} annual={annual} />
+          </ScrollReveal>
 
-                <div className="mb-6">
-                  <h3 className="font-display font-bold text-foreground text-xl mb-1">
-                    {tier.name}
-                  </h3>
-                  <p className="text-sm font-body text-muted-foreground">
-                    {tier.description}
-                  </p>
-                </div>
+          {/* Pro — order-1 on mobile (first) */}
+          <ScrollReveal delay={0.08} className="order-1 md:order-2 md:-translate-y-2">
+            <TierCard tier={tiers[1]} annual={annual} />
+          </ScrollReveal>
 
-                {/* Price */}
-                <div className="mb-6 flex items-end gap-1">
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={annual ? "annual" : "monthly"}
-                      className="font-display font-extrabold text-4xl text-foreground"
-                      initial={{ opacity: 0, y: -12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 12 }}
-                      transition={{ duration: 0.25 }}
-                    >
-                      £{annual ? tier.annualPrice : tier.monthlyPrice}
-                    </motion.span>
-                  </AnimatePresence>
-                  {(tier.monthlyPrice > 0 || tier.annualPrice > 0) && (
-                    <span className="text-sm font-body text-muted-foreground mb-1.5">
-                      /{annual ? "mo, billed annually" : "month"}
-                    </span>
-                  )}
-                </div>
-
-                <Button
-                  variant={tier.ctaVariant}
-                  className={cn(
-                    "w-full rounded-full font-body font-semibold mb-6",
-                    tier.popular && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-coral"
-                  )}
-                >
-                  {tier.cta}
-                </Button>
-
-                {/* Features */}
-                <ul className="space-y-3 flex-1">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm font-body">
-                      <Check className="w-4 h-4 text-success mt-0.5 flex-none" />
-                      <span className="text-foreground/80">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </ScrollReveal>
-          ))}
+          {/* Business — order-3 on mobile */}
+          <ScrollReveal delay={0.16} className="order-3 md:order-3">
+            <TierCard tier={tiers[2]} annual={annual} />
+          </ScrollReveal>
         </div>
 
         <ScrollReveal className="text-center mt-8">
-          <p className="text-sm font-mono text-muted-foreground">
-            Need more edits? Top up anytime from £2.99 — no subscription required.
+          <p className="text-sm font-body text-muted-foreground">
+            Need more credits?{" "}
+            <span className="underline underline-offset-2 cursor-pointer hover:text-foreground transition-colors">
+              Top up anytime from £2.99
+            </span>
           </p>
         </ScrollReveal>
       </div>
     </section>
   );
 };
+
+function TierCard({ tier, annual }: { tier: (typeof tiers)[number]; annual: boolean }) {
+  const price = annual ? tier.annualPrice : tier.monthlyPrice;
+
+  return (
+    <div
+      className={cn(
+        "rounded-[14px] border p-6 md:p-8 bg-card flex flex-col h-full transition-shadow duration-300",
+        tier.popular
+          ? "border-primary border-2 shadow-lg"
+          : "border-border shadow-sm hover:shadow-md"
+      )}
+    >
+      {/* Popular badge */}
+      {tier.popular && (
+        <div className="mb-4">
+          <span
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-white text-xs font-body font-semibold"
+            style={{
+              background: "linear-gradient(135deg, hsl(350 80% 58%) 0%, hsl(20 85% 58%) 100%)",
+            }}
+          >
+            ★ Most Popular
+          </span>
+        </div>
+      )}
+
+      <div className="mb-5">
+        <h3 className="font-display font-bold text-foreground text-xl mb-1">{tier.name}</h3>
+        <p className="text-sm font-body text-muted-foreground">{tier.description}</p>
+      </div>
+
+      {/* Price with animated transition */}
+      <div className="mb-6 flex items-end gap-1 h-12 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={annual ? `${tier.name}-annual` : `${tier.name}-monthly`}
+            className="font-display font-extrabold text-[2.5rem] leading-none text-foreground"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            £{price}
+          </motion.span>
+        </AnimatePresence>
+        <span className="text-sm font-body text-muted-foreground mb-1">
+          {tier.priceSuffix}
+          {annual && tier.monthlyPrice > 0 && ", billed annually"}
+        </span>
+      </div>
+
+      <Button
+        variant={tier.ctaVariant}
+        className={cn(
+          "w-full rounded-full font-body font-semibold mb-6 h-11 transition-all duration-200",
+          tier.popular
+            ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-coral hover:shadow-coral-hover hover:-translate-y-0.5"
+            : "border-border hover:bg-muted"
+        )}
+      >
+        {tier.cta}
+      </Button>
+
+      {/* Features */}
+      <ul className="space-y-3 flex-1">
+        {tier.features.map((feature) => (
+          <li key={feature} className="flex items-start gap-2.5">
+            <Check className="w-4 h-4 text-success mt-0.5 flex-none" />
+            <span className="text-sm font-body text-foreground/80">{feature}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default PricingSection;
