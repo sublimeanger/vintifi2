@@ -29,18 +29,29 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { type, tier, pack, annual, price_id } = body;
 
+    // Price ID lookup table (hardcoded from Stripe seed)
+    const PRICE_IDS: Record<string, string> = {
+      "pro_monthly":       "price_1T2XJ54qASjubvn3bcfx6Yzj",
+      "pro_annual":        "price_1T2XJ54qASjubvn3b64GDARJ",
+      "business_monthly":  "price_1T2XJ64qASjubvn3TMLLzYui",
+      "business_annual":   "price_1T2XJ64qASjubvn3Ogxe6uj4",
+      "pack_10":           "price_1T2XJ74qASjubvn37dtevWVw",
+      "pack_30":           "price_1T2XJ74qASjubvn3E9qoBuKz",
+      "pack_75":           "price_1T2XJ84qASjubvn3AMPHOgHK",
+    };
+
     // Resolve price ID
     let resolvedPriceId = price_id;
     if (!resolvedPriceId && type === "subscription") {
       const isAnnual = annual === true;
-      const tierKey = (tier ?? "pro").toUpperCase();
-      const period = isAnnual ? "ANNUAL" : "MONTHLY";
-      resolvedPriceId = Deno.env.get(`STRIPE_PRICE_${tierKey}_${period}`);
-      if (!resolvedPriceId) throw new Error(`Stripe price not configured for ${tierKey} ${period}`);
+      const tierKey = (tier ?? "pro").toLowerCase();
+      const period = isAnnual ? "annual" : "monthly";
+      resolvedPriceId = PRICE_IDS[`${tierKey}_${period}`];
+      if (!resolvedPriceId) throw new Error(`Price not configured for ${tierKey} ${period}`);
     } else if (!resolvedPriceId && type === "credit_pack") {
       const packKey = (pack ?? "10").toString();
-      resolvedPriceId = Deno.env.get(`STRIPE_PRICE_PACK_${packKey}`);
-      if (!resolvedPriceId) throw new Error(`Stripe price not configured for pack ${packKey}`);
+      resolvedPriceId = PRICE_IDS[`pack_${packKey}`];
+      if (!resolvedPriceId) throw new Error(`Price not configured for pack ${packKey}`);
     }
 
     if (!resolvedPriceId) throw new Error("price_id required");
