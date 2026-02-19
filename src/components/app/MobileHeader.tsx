@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 // ── Mock data (Phase 3: replace with auth context) ─────────────────────────
 const CREDITS = 47;
+const CREDITS_LIMIT = 50;
 
 interface MobileHeaderProps {
   onMenuOpen: () => void;
@@ -12,7 +13,9 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
   const isCritical = CREDITS <= 2;
-  const isLow = CREDITS <= 5 && !isCritical;
+  const isLow = CREDITS / CREDITS_LIMIT <= 0.2 && !isCritical;
+  // Normal: neutral background, coral sparkle icon (per spec §3.2)
+  const isNormal = !isCritical && !isLow;
 
   return (
     <header
@@ -36,7 +39,7 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
             ? "bg-destructive/10 text-destructive"
             : isLow
               ? "bg-warning/10 text-warning"
-              : "bg-muted text-muted-foreground",
+              : "bg-muted text-foreground", // Normal: neutral bg, foreground text
         )}
         aria-label={`${CREDITS} credits remaining`}
       >
@@ -46,12 +49,17 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
             transition={{ duration: 1.2, repeat: Infinity }}
             className="flex items-center gap-1.5"
           >
+            {/* Critical: amber/red sparkle */}
             <Sparkles size={12} />
             <span>{CREDITS}</span>
           </motion.div>
         ) : (
           <>
-            <Sparkles size={12} />
+            {/* Normal state: coral sparkle per spec; Low: amber via parent text colour */}
+            <Sparkles
+              size={12}
+              className={isNormal ? "text-primary" : undefined}
+            />
             <span>{CREDITS}</span>
           </>
         )}
@@ -60,7 +68,7 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
       {/* Hamburger */}
       <button
         onClick={onMenuOpen}
-        className="p-2 rounded-md hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+        className="flex items-center justify-center rounded-lg hover:bg-surface-sunken transition-colors min-h-[44px] min-w-[44px]"
         aria-label="Open menu"
       >
         <Menu size={20} />
