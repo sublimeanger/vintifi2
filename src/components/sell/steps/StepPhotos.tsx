@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2, Loader2, ExternalLink } from "lucide-react";
 import BeforeAfterSlider from "@/components/BeforeAfterSlider";
 import { processImage } from "@/lib/vintography-api";
+import { uploadImage } from "@/lib/upload";
+import { useAuth } from "@/contexts/AuthContext";
 import type { SellWizardState, SellWizardAction } from "@/lib/sell-wizard-state";
 
 interface StepPhotosProps {
@@ -12,9 +14,11 @@ interface StepPhotosProps {
 
 export function StepPhotos({ state, dispatch }: StepPhotosProps) {
   const { item, firstItemFree } = state;
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(0);
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
+  const [uploadingStudio, setUploadingStudio] = useState(false);
 
   const photos = item.originalPhotos;
   const currentPhoto = photos[activeIndex];
@@ -37,9 +41,25 @@ export function StepPhotos({ state, dispatch }: StepPhotosProps) {
     }
   }
 
-  function handleOpenStudio() {
-    const url = encodeURIComponent(currentPhoto);
-    navigate(`/vintography?imageUrl=${url}&returnToWizard=1&photoIndex=${activeIndex}`);
+  async function handleOpenStudio() {
+    if (!currentPhoto) return;
+    setUploadingStudio(true);
+    try {
+      let studioUrl = currentPhoto;
+      // Blob URLs die on navigation — upload to storage first
+      if (currentPhoto.startsWith('blob:')) {
+        const res = await fetch(currentPhoto);
+        const blob = await res.blob();
+        const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' });
+        studioUrl = await uploadImage(file, 'listing-images', user?.id ?? 'anon');
+      }
+      navigate(`/vintography?imageUrl=${encodeURIComponent(studioUrl)}&returnToWizard=1&photoIndex=${activeIndex}`);
+    } catch {
+      // If upload fails, try with original URL anyway
+      navigate(`/vintography?imageUrl=${encodeURIComponent(currentPhoto)}&returnToWizard=1&photoIndex=${activeIndex}`);
+    } finally {
+      setUploadingStudio(false);
+    }
   }
 
   function handleContinue() {
@@ -124,10 +144,11 @@ export function StepPhotos({ state, dispatch }: StepPhotosProps) {
 
           <button
             onClick={handleOpenStudio}
-            className="w-full min-h-[44px] rounded-xl border border-border text-sm font-medium text-foreground flex items-center justify-center gap-2 hover:bg-surface-sunken transition-colors"
+            disabled={uploadingStudio}
+            className="w-full min-h-[44px] rounded-xl border border-border text-sm font-medium text-foreground flex items-center justify-center gap-2 hover:bg-surface-sunken transition-colors disabled:opacity-60"
           >
-            <ExternalLink size={14} />
-            Open Photo Studio
+            {uploadingStudio ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+            {uploadingStudio ? 'Opening Studio…' : 'Open Photo Studio'}
           </button>
 
           <button
@@ -143,10 +164,11 @@ export function StepPhotos({ state, dispatch }: StepPhotosProps) {
       ) : (
         <button
           onClick={handleOpenStudio}
-          className="w-full min-h-[44px] rounded-xl border border-border text-sm font-medium text-foreground flex items-center justify-center gap-2 hover:bg-surface-sunken transition-colors"
+          disabled={uploadingStudio}
+          className="w-full min-h-[44px] rounded-xl border border-border text-sm font-medium text-foreground flex items-center justify-center gap-2 hover:bg-surface-sunken transition-colors disabled:opacity-60"
         >
-          <ExternalLink size={14} />
-          Edit again in Photo Studio
+          {uploadingStudio ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+          {uploadingStudio ? 'Opening Studio…' : 'Edit again in Photo Studio'}
         </button>
       )}
 
