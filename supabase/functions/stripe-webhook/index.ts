@@ -1,14 +1,16 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Map Stripe product IDs → tier/credits (configure after creating Stripe products)
+// Map Stripe product IDs → tier/credits
 const TIER_MAP: Record<string, { tier: string; credits: number }> = {
-  // These will be filled in after Stripe products are created
-  // "prod_xxx": { tier: "pro", credits: 50 },
+  "prod_U0YPAneS6DHmV0": { tier: "pro", credits: 50 },       // Pro
+  "prod_U0YPxt0P0TTPdQ": { tier: "business", credits: 200 }, // Business
 };
 
 const CREDIT_PACK_MAP: Record<string, number> = {
-  // "prod_xxx": 10,
+  "prod_U0YPXPsYTuuLVq": 10,  // Starter pack
+  "prod_U0YPeaPuwSnrI3": 30,  // Popular pack
+  "prod_U0YPrduiQGdF5V": 75,  // Power pack
 };
 
 async function findUserByEmail(supabase: ReturnType<typeof createClient>, email: string): Promise<{ id: string } | null> {
