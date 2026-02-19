@@ -1,251 +1,417 @@
 
-# Phase 4: Sell Wizard
+# Phase 0: Backend Foundation
 
 ## What This Builds
 
-The Sell Wizard is Vintifi's core conversion flow: a 5-step guided experience that takes a user from "I have an item" to a complete Vinted-Ready Pack (professional photos, optimised listing text, smart price recommendation). This replaces the 16-line stub at `src/pages/Sell.tsx`.
+This phase wires the real backend under the existing Phases 1–4 frontend. Every component that currently uses mock data (credits, user profile, photo processing, listing optimisation, price check) will be connected to a live Supabase database, auth system, and Edge Functions.
 
-**New step order (vs old):** Add Item → Photos → Optimise → Price → Pack
-
-All AI calls (optimise, price check) are **stubbed** with 2-second delays returning mock data — identical to how Phase 3 stubbed `processImage`. The Photo Studio deep-link return flow wires up to the existing `src/pages/Vintography.tsx` via `sessionStorage` handoff. No Supabase is required.
+Nothing about the existing frontend components, design system, or routing structure gets modified — this is purely additive infrastructure.
 
 ---
 
-## Architecture
+## Current State vs Target State
+
+The project currently has:
+- Full frontend UI (Phases 1–4) with mock data hardcoded throughout
+- `src/lib/vintography-api.ts` with a 2-second stub instead of a real Edge Function call
+- `src/lib/sell-wizard-state.ts` with hardcoded `firstItemFree: true`
+- `AppSidebar` and `MobileHeader` using `MOCK_USER` with 47 credits
+- No Supabase client, no auth context, no route guards, no real data hooks
+
+After Phase 0:
+- Supabase project connected with all 6 tables, triggers, and RLS
+- Real auth (email + password) with `AuthContext` providing live `profile.credits_balance`
+- All app routes behind `ProtectedRoute`
+- 7 Edge Functions powered by the AI prompts from @Vintifi
+- React Query hooks ready for Phase 5+ page builds
+- `vintography-api.ts` updated to call the real `vintography` Edge Function
+
+---
+
+## Alignment Notes — Existing Code vs Spec
+
+Before implementing, these discrepancies between the spec and existing code need to be resolved:
+
+| Spec (Phase 0) | Existing Code | Resolution |
+|---|---|---|
+| `/sell` route called `SellWizard` | Page file is `src/pages/Sell.tsx` | Keep existing filename, update route if needed |
+| No `/items/:id` route | Spec requires it | Add as placeholder page |
+| `Optimize` vs `Optimise` | Existing page is `Optimize.tsx`, route is `/optimize` | Keep existing, spec nav link `/optimise` maps to same |
+| `Index.tsx` is the landing page | Spec calls it `Landing.tsx` | Keep `Index.tsx`, no rename |
+| `QueryClient` has no `defaultOptions` | Spec adds `staleTime: 2min, retry: 1` | Update when rewriting App.tsx |
+
+---
+
+## Implementation Order
+
+### Step 1 — Supabase Connection
+
+Enable Supabase (Lovable Cloud) and connect the project. This generates `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` automatically.
+
+### Step 2 — Database Migration
+
+A single migration file creates all 6 tables, indexes, triggers, functions, and storage buckets in the correct dependency order:
 
 ```text
-src/
-├── pages/
-│   └── Sell.tsx                           ← REPLACED — now SellWizard orchestration
-│
-├── components/sell/
-│   ├── WizardProgress.tsx                 ← 5-step progress bar (desktop + mobile)
-│   ├── WizardFooter.tsx                   ← Previous / Next buttons
-│   ├── FirstItemFreeBanner.tsx            ← Persistent "your first item is free" banner
-│   ├── MarketRangeBar.tsx                 ← Price range visualisation (gradient track)
-│   │
-│   └── steps/
-│       ├── StepAddItem.tsx                ← Step 1: Vinted URL import + manual form + photos
-│       ├── StepPhotos.tsx                 ← Step 2: Quick Remove BG + Photo Studio deep link
-│       ├── StepOptimise.tsx               ← Step 3: AI title/description/hashtags (editable)
-│       ├── StepPrice.tsx                  ← Step 4: Price check + strategy cards + manual override
-│       └── StepPack.tsx                   ← Step 5: Vinted-Ready Pack + copy + save
-│
-└── lib/
-    └── sell-wizard-state.ts               ← Types, reducer, session recovery
+1. update_updated_at() function        ← used by multiple table triggers
+2. profiles table + handle_new_user() trigger + profiles_updated_at trigger
+3. RLS on profiles (SELECT/UPDATE own row)
+4. credit_transactions table + index + RLS
+5. listings table + index + triggers + RLS
+6. vintography_jobs table + index + triggers + RLS
+7. price_checks table + index + RLS
+8. subscriptions table + index + triggers + RLS
+9. deduct_credits() SECURITY DEFINER function
+10. Storage buckets: listing-images (public), vintography-results (public), user-uploads (private)
+11. Storage RLS policies
 ```
 
-**Modified files:**
-- `src/pages/Sell.tsx` — full replacement with wizard orchestration
-- `src/pages/Vintography.tsx` — add `returnToWizard` sessionStorage handoff in ResultActions
+Key implementation details from the spec:
+
+- `profiles.id` = FK to `auth.users(id) ON DELETE CASCADE` (NOT a separate `user_id` column — the profile row's own PK is the user UUID)
+- `handle_new_user()` initialises new accounts with `credits_balance = 3`, `credits_monthly_allowance = 3`, and `credits_reset_date = first day of next month`
+- `deduct_credits()` uses `SELECT ... FOR UPDATE` row locking to prevent race conditions when multiple requests arrive simultaneously
+- `vintography_jobs` operation column CHECK constraint includes all 8 operations: `clean_bg`, `lifestyle_bg`, `flatlay`, `mannequin`, `ghost_mannequin`, `ai_model`, `enhance`, `decrease`
+- `listings.condition` CHECK includes: `new_with_tags`, `new_without_tags`, `very_good`, `good`, `satisfactory`
+
+### Step 3 — TypeScript Types
+
+**File: `src/types/database.ts`**
+
+The full `Database` interface (for typed Supabase client) plus exported entity types:
+- `Profile` — all columns from `profiles` table
+- `Listing` — all columns from `listings` table
+- `VintographyJob` — all columns from `vintography_jobs` table
+- `CreditTransaction` — all columns from `credit_transactions` table
+- `PriceCheck` — all columns from `price_checks` table
+- `Subscription` — all columns from `subscriptions` table
+
+### Step 4 — Supabase Client
+
+**File: `src/lib/supabase.ts`**
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database'
+
+export const supabase = createClient<Database>(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
+```
+
+The `@supabase/supabase-js` package is already installed (confirmed in `package.json`).
+
+### Step 5 — Auth Context
+
+**File: `src/contexts/AuthContext.tsx`**
+
+Provides the entire app with:
+- `user: User | null` — Supabase auth user
+- `session: Session | null`
+- `profile: Profile | null` — the `profiles` row (includes `credits_balance`, `subscription_tier`, `first_item_pass_used`)
+- `isLoading: boolean` — true during initial auth check
+- `signUp(email, password, displayName?)` → `{ error }`
+- `signIn(email, password)` → `{ error }`
+- `signOut()`
+- `refreshProfile()` — re-fetches the profile row; called by Edge Function hooks after credit consumption
+
+Auth state listener is set up BEFORE `getSession()` to prevent race conditions. `onAuthStateChange` triggers profile fetch on every auth state transition.
+
+### Step 6 — Protected Route
+
+**File: `src/components/auth/ProtectedRoute.tsx`**
+
+- Uses `useAuth()` hook
+- During auth check (`isLoading`): renders a branded loading spinner (Vintifi wordmark + spinning coral ring — matches existing `AppSidebar` branding style)
+- When `!user`: `<Navigate to="/login" replace />`
+- When authenticated: `<Outlet />`
+
+### Step 7 — Auth Pages
+
+**File: `src/pages/Login.tsx`**
+
+Standalone page (no `AppShell`, no sidebar):
+- Centred card layout, max-width 420px
+- Vintifi wordmark above card (Sora Bold, coral)
+- Email + password inputs (existing `bg-surface-sunken border-border rounded-xl` style)
+- "Sign in" coral primary button
+- "Forgot password?" text link (placeholder — navigates to `/signup` for now)
+- "Don't have an account? Sign up →" link to `/signup`
+- Error toast via Sonner on auth failure
+- On success: `navigate('/dashboard')`
+
+**File: `src/pages/SignUp.tsx`**
+
+Same card layout:
+- Display name + email + password
+- "Create account" coral primary button with 7-day free trial callout
+- Error toast on failure
+- On success: `navigate('/dashboard')` (email confirmation disabled for MVP)
+- "Already have an account? Sign in →" link
+
+### Step 8 — App.tsx Update
+
+Replace the current `App.tsx` with the spec's route structure:
+
+```
+/ (Index) — public, no AppShell
+/login — public, no AppShell
+/signup — public, no AppShell
+
+<ProtectedRoute>          ← redirects to /login if not auth'd
+  <AppShell>              ← sidebar + mobile nav
+    /dashboard
+    /vintography
+    /sell
+    /listings
+    /items/:id            ← new: ItemDetail placeholder
+    /price-check
+    /optimize
+    /trends
+    /settings
+  </AppShell>
+</ProtectedRoute>
+
+* → <Navigate to="/" />
+```
+
+Add `AuthProvider` wrapping everything. Update `QueryClient` to add `defaultOptions: { queries: { staleTime: 1000 * 60 * 2, retry: 1 } }`.
+
+Create a minimal `src/pages/ItemDetail.tsx` placeholder using existing `PageTransition` + `PageHeader` + `EmptyState` pattern.
+
+### Step 9 — File Upload Utility
+
+**File: `src/lib/upload.ts`**
+
+```typescript
+export async function uploadImage(file, bucket, userId) {
+  // nanoid filename, path = userId/filename.ext
+  // supabase.storage.from(bucket).upload(path, file)
+  // returns publicUrl
+}
+```
+
+`nanoid` is not currently installed — will use `crypto.randomUUID()` instead (available natively in modern browsers) to avoid adding a dependency.
+
+### Step 10 — React Query Data Hooks
+
+**File: `src/hooks/useListings.ts`**
+- `useListings()` — `SELECT * FROM listings WHERE user_id = auth.uid() ORDER BY created_at DESC`
+- `useListing(id)` — single listing by id
+- `useUpsertListing()` — insert or update via `.upsert()`; invalidates `['listings']` on success
+- `useDeleteListing()` — delete by id; invalidates `['listings']` on success
+
+**File: `src/hooks/useVintography.ts`**
+- `useVintographyJobs()` — last 20 completed jobs for current user
+- `useProcessImage()` — mutation that calls `supabase.functions.invoke('vintography', { body })`, calls `refreshProfile()` on success
+
+**File: `src/hooks/usePriceCheck.ts`**
+- `usePriceCheck()` — mutation calling `price-check` Edge Function, calls `refreshProfile()` on success
+
+**File: `src/hooks/useOptimiseListing.ts`**
+- `useOptimiseListing()` — mutation calling `optimize-listing` Edge Function, calls `refreshProfile()` on success
+
+**File: `src/hooks/useStripe.ts`**
+- `useCreateCheckout()` — mutation calling `create-checkout`, redirects to `data.url`
+- `useManageSubscription()` — mutation calling `manage-subscription`, redirects to `data.url`
+
+### Step 11 — Update vintography-api.ts
+
+The existing `src/lib/vintography-api.ts` stub must be updated to call the real `vintography` Edge Function when available, while keeping a graceful fallback. The updated version:
+
+```typescript
+export async function processImage(imageUrl, operation, params) {
+  const { data, error } = await supabase.functions.invoke('vintography', {
+    body: { imageUrl, operation, params }
+  });
+  if (error || !data?.success) {
+    return { success: false, imageUrl, error: data?.error || error?.message }
+  }
+  return { success: true, imageUrl: data.resultUrl };
+}
+```
+
+This preserves the exact same interface (`processImage(url, operation, params) → { success, imageUrl }`) so all Phase 3 and Phase 4 components work without any changes.
+
+### Step 12 — Edge Functions (7 functions)
+
+#### `supabase/functions/vintography/index.ts`
+
+Built by combining:
+- The full AI prompt library from @Vintifi's `vintography/index.ts` (all 8 operation prompts — `remove_bg`, `smart_bg`, `model_shot`, `mannequin_shot`, `ghost_mannequin`, `flatlay_style`, `decrease`, `enhance`, all with their sub-options)
+- The new credit system using `deduct_credits()` RPC instead of the old `usage_credits` table
+- The new `vintography_jobs` schema (columns: `original_image_url`, `result_image_url`, `status`, `credits_cost`, `first_item_free`, `pipeline_id`, `pipeline_step`, `processing_time_ms`)
+- Storage upload to `vintography-results` bucket (vs old `vintography` bucket)
+- Response shape matching new spec: `{ success, resultUrl, jobId, creditsUsed }`
+
+Operation mapping (spec name → @Vintifi prompt name):
+- `clean_bg` → `remove_bg` prompt
+- `lifestyle_bg` → `smart_bg` prompt  
+- `flatlay` → `flatlay_style` prompt
+- `mannequin` → `mannequin_shot` prompt
+- `ghost_mannequin` → `ghost_mannequin` prompt
+- `ai_model` → `model_shot` prompt (costs 4 credits, not 1)
+- `enhance` → `enhance` prompt
+- `decrease` → `decrease` prompt
+
+All prompts use the Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`) with image generation models. The function handles 429 (rate limit) and 402 (payment required) errors with appropriate user-facing messages.
+
+#### `supabase/functions/optimize-listing/index.ts`
+
+Built from @Vintifi's `optimize-listing/index.ts`:
+- The full GPT-4o prompt with the COLOUR RULE, TITLE FORMULA, CONDITION & DEFECT DISCLOSURE, DESCRIPTION PERSONA, and HASHTAG sections
+- Input: `{ title, description, brand, category, size, condition, colour, photos, sellWizard }`
+- Uses `deduct_credits()` for credit deduction (1 credit per call)
+- Returns: `{ success, title, description, hashtags, creditsUsed }`
+- First-item-free pass check via `profiles.first_item_pass_used`
+- Logs transaction to `credit_transactions`
+
+Key difference from @Vintifi: uses new `deduct_credits()` SQL function rather than the old `usage_credits` table.
+
+#### `supabase/functions/price-check/index.ts`
+
+Built from @Vintifi's `price-check/index.ts`:
+- Firecrawl scrapes live Vinted UK search results for £ prices
+- Perplexity `sonar-pro` provides broader eBay/Depop market context
+- GPT-4 synthesises both data sources into structured price recommendations
+- Returns: `{ success, suggestedPrice, priceRange: { low, median, high }, comparables[], sampleSize, creditsUsed }`
+- Stores result in `price_checks` table; if `listingId` provided, also updates `listings.suggested_price` etc.
+- Requires secrets: `FIRECRAWL_API_KEY`, `PERPLEXITY_API_KEY`, `LOVABLE_API_KEY`
+
+#### `supabase/functions/scrape-vinted/index.ts`
+
+Built from @Vintifi's `optimize-listing/index.ts` (the Vinted URL scrape logic is embedded there):
+- Method 1: Firecrawl scrape with HTML + markdown + links formats, `waitFor: 5000ms`
+- Extracts: title (from `og:title`), description (from `itemprop="description"` or OG), brand/size/condition (regex on markdown), image URLs (from markdown + `og:image`)
+- Downloads images to `user-uploads` bucket under `userId/` path
+- Returns structured `item` object with storage URLs
+- No credit cost
+
+#### `supabase/functions/stripe-webhook/index.ts`
+
+Built from @Vintifi's `stripe-webhook/index.ts` with schema updates:
+- Uses Stripe SDK `stripe.webhooks.constructEventAsync()` for signature verification
+- Handles: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`
+- On subscription events: updates `profiles.subscription_tier`, `profiles.credits_monthly_allowance`, `profiles.credits_balance` (using `GREATEST`)
+- On subscription delete: resets to `free` tier, 3 credits
+- On credit pack purchase: adds credits to `profiles.credits_balance`, logs to `credit_transactions`
+- Requires secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+
+Note: `TIER_MAP` uses new product IDs that will be configured after Stripe products are created.
+
+#### `supabase/functions/create-checkout/index.ts`
+
+Built from @Vintifi's `create-checkout/index.ts`:
+- Auth: reads Bearer token, validates user
+- Input: `{ type: 'subscription' | 'credit_pack', tier?, pack?, annual? }`
+- Looks up Stripe price IDs from environment secrets: `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL`, `STRIPE_PRICE_BIZ_MONTHLY`, `STRIPE_PRICE_BIZ_ANNUAL`, `STRIPE_PRICE_PACK_10`, `STRIPE_PRICE_PACK_30`, `STRIPE_PRICE_PACK_75`
+- Creates/finds Stripe customer by email
+- Adds 7-day free trial for first-time subscribers (checks existing subscriptions)
+- Returns `{ url }` — frontend redirects to Stripe Checkout
+
+#### `supabase/functions/manage-subscription/index.ts`
+
+Built directly from @Vintifi's `customer-portal/index.ts` (identical logic):
+- Auth: validates Bearer token
+- Finds Stripe customer by user email
+- Creates Stripe Customer Portal session
+- Returns `{ url }`
+
+### Step 13 — Supabase Config
+
+**File: `supabase/config.toml`**
+
+Set `verify_jwt = false` for all 7 Edge Functions (JWT validation done in code via `supabase.auth.getUser(token)`):
+
+```toml
+[functions.vintography]
+verify_jwt = false
+
+[functions.optimize-listing]
+verify_jwt = false
+
+[functions.price-check]
+verify_jwt = false
+
+[functions.scrape-vinted]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-checkout]
+verify_jwt = false
+
+[functions.manage-subscription]
+verify_jwt = false
+```
+
+Note: `stripe-webhook` uses Stripe's own signature verification (not Supabase JWT).
 
 ---
 
-## Implementation Steps
+## Required Secrets
 
-### Step 1 — State Layer: `src/lib/sell-wizard-state.ts`
+After implementation, these secrets must be set in the Supabase dashboard (Settings → Edge Functions → Secrets):
 
-Complete reducer with all types and actions from the spec:
+| Secret | Used By | Where to Get |
+|---|---|---|
+| `LOVABLE_API_KEY` | vintography, optimize-listing, price-check | Auto-provisioned by Lovable |
+| `FIRECRAWL_API_KEY` | scrape-vinted, price-check | firecrawl.dev dashboard |
+| `PERPLEXITY_API_KEY` | price-check | perplexity.ai API settings |
+| `STRIPE_SECRET_KEY` | stripe-webhook, create-checkout, manage-subscription | Stripe Dashboard → Developers |
+| `STRIPE_WEBHOOK_SECRET` | stripe-webhook | Stripe Dashboard → Webhooks |
+| `STRIPE_PRICE_PRO_MONTHLY` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_PRO_ANNUAL` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_BIZ_MONTHLY` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_BIZ_ANNUAL` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_PACK_10` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_PACK_30` | create-checkout | Stripe Dashboard → Products |
+| `STRIPE_PRICE_PACK_75` | create-checkout | Stripe Dashboard → Products |
 
-- **`WizardItem`** shape: title, description, brand, category, size, condition, color, source_url, originalPhotos[], enhancedPhotos[], optimisedTitle, optimisedDescription, hashtags[], suggestedPrice, priceRange, priceStrategy, chosenPrice
-- **`SellWizardState`**: currentStep (1–5), completedSteps[], direction, item, 5× loading booleans (isImporting, isProcessingPhotos, isOptimising, isPricing, isSaving), firstItemFree, error
-- **19 action types** covering navigation, item data, photos, optimisation, pricing, saving
-- **Session recovery** using `sessionStorage` key `vintifi_sell_wizard_v2` — restored on `useReducer` init, saved on every state change, cleared on "Save & Finish"
-
-### Step 2 — Wizard Orchestration: `src/pages/Sell.tsx` (replace)
-
-The page component becomes the orchestration layer:
-
-- `useReducer(sellWizardReducer, initialWizardState, sessionRecoveryInit)`
-- `useEffect` to save state to sessionStorage on every change
-- `useEffect` on mount to pick up `vintifi_studio_result` from sessionStorage (Photo Studio return)
-- Mock `firstItemFree = true` for Phase 4 (hardcoded, no Supabase yet) — shows the free banner throughout
-- `AnimatePresence mode="wait"` wrapping `renderStep()` — directional slide transitions (`x: ±30`) keyed by `currentStep`
-- Layout: `max-w-[680px] mx-auto px-4 py-6 lg:py-10`
-- Renders: `FirstItemFreeBanner` (if firstItemFree) → `WizardProgress` → animated step content → `WizardFooter` (except Step 2 which manages its own continue)
-
-### Step 3 — `WizardProgress.tsx`
-
-Spec-faithful progress bar:
-
-- **Desktop (`sm:flex`):** 5 step nodes connected by animated fill-lines. Current step: coral `w-9 h-9` circle + `ring-4 hsla(350,80%,58%,0.15)` glow ring. Past steps: coral background + white `Check` icon. Future steps: `bg-surface-sunken border-border`. Connector lines: `bg-border` track + coral `motion.div` fill (`width: isPast ? '100%' : isCurrent ? '50%' : '0%'`, spring 100/20). Labels below each node.
-- **Mobile (`sm:hidden`):** Condensed dots — past/future are `w-2.5 h-2.5 rounded-full`, current is `w-8 h-2.5 rounded-full` (elongated pill). Active label shown below the pill only.
-- Steps are **not clickable** — linear wizard, no skipping.
-
-### Step 4 — `WizardFooter.tsx`
-
-Persistent bottom nav:
-
-- `border-t border-border mt-10 pt-6 flex items-center justify-between`
-- **Previous** (Step > 1): ghost border button with `ArrowLeft`
-- **Next**: coral primary button. Disabled state: `bg-surface-sunken text-muted-foreground cursor-not-allowed`. Active: coral + `shadow-[0_4px_14px_hsla(350,80%,58%,0.3)] hover:-translate-y-0.5`
-- Step-specific labels: "Continue to Photos" / "Continue to Optimise" / "Continue to Pricing" / "See Your Listing Pack" / "Save & Finish ✓"
-- Loading state: `Loader2 animate-spin` + "Processing…"
-- Step 2 does NOT render `WizardFooter` — its continue button is embedded in `StepPhotos`
-
-### Step 5 — `FirstItemFreeBanner.tsx`
-
-Shown when `firstItemFree === true` (mocked as `true` for Phase 4):
-
-- `bg-gradient-to-r from-primary/8 via-primary/5 to-accent/8 border border-primary/15 rounded-xl px-5 py-3.5`
-- `Gift` icon in `w-8 h-8 rounded-lg bg-primary/10` container
-- Title: "Your first item is free ✨" + subtitle explaining the full wizard is covered
-
-### Step 6 — `StepAddItem.tsx`
-
-Two-path item creation:
-
-**URL Import card:**
-- `Link2` icon header + URL text input + "Import" button
-- On click: `SET_IMPORT_LOADING(true)` → 1.5s stub delay → dispatch `SET_ITEM_DATA` with mock populated data (Nike Air Max 90, brand, category, 3 mock photo URLs using `picsum.photos`) → `SET_IMPORT_LOADING(false)`
-- Import success banner: `bg-success/5 border-success/20`, shows item title + photo count
-- `autoScroll` to photo preview after success
-
-**"or add manually" divider**
-
-**Manual form fields** (all using `bg-surface-sunken border-border rounded-xl px-4 py-3`):
-- Title (text, required, max 100)
-- Brand (text, required)
-- Category (native `<select>` styled, required) — Tops, Bottoms, Dresses, Outerwear, Shoes, Accessories, Other
-- Size (text, required)
-- Condition (native `<select>`) — New with tags / New without tags / Very good / Good / Satisfactory
-- Colour (text, optional)
-- Description (textarea, optional)
-
-**Photo upload section:**
-- Horizontal scroll strip of 96×96 thumbnails with × remove button (visible on group-hover)
-- "Add" dashed-border tile with `Plus` icon — triggers `<input type="file" accept="image/*">` → creates `URL.createObjectURL` → dispatches `ADD_ORIGINAL_PHOTO`
-- Max 10 photos; counter "X / 10"
-
-**Validation:** "Continue to Photos" button disabled until title, brand, category, size, condition are filled AND at least 1 photo exists. When user taps Next with empty required fields, inline red validation hints appear below each empty field.
-
-### Step 7 — `StepPhotos.tsx`
-
-Photo enhancement step:
-
-**Per-photo card:**
-- Counter "Photo N of M" + "Enhanced ✓" badge (when processed)
-- `aspect-[4/5] rounded-xl overflow-hidden bg-surface-sunken` preview
-  - If enhanced: `BeforeAfterSlider` (already in codebase at `src/components/BeforeAfterSlider.tsx`) with `autoReveal={true}` and `aspectRatio="4/5"`
-  - If not enhanced: plain `<img>` of current photo
-- Action buttons (if not yet enhanced):
-  1. **Quick Remove Background** (coral primary) — calls `processImage(url, 'clean_bg', {})` from `src/lib/vintography-api.ts` (2s stub), dispatches `SET_ENHANCED_PHOTO`, auto-advances to next unenhanced photo. Credit badge hidden when `firstItemFree`.
-  2. **Open Photo Studio** (ghost border) — calls `navigate('/vintography?imageUrl=...&returnToWizard=1&photoIndex=N')`
-  3. **Skip this photo** (text link)
-- Action (if already enhanced): "Edit again in Photo Studio" ghost button
-
-**Photo strip thumbnail nav:**
-- `flex gap-2 justify-center` — 56×56 thumbs, `border-primary` on active, green `Check` badge overlay on enhanced, `ring-2 ring-success/30` on enhanced
-
-**Manual continue button** (always visible):
-- `"I've finished editing — continue →"` → dispatches `NEXT_STEP` directly (bypasses `WizardFooter`)
-- This step's footer button is intentionally NOT the standard `WizardFooter` Next button
-
-**Local state:** `activePhotoIndex`, `skippedPhotos: Set<number>`
-
-### Step 8 — Photo Studio Return Flow
-
-Modify `src/pages/Vintography.tsx`'s `ResultActions` to handle the `returnToWizard` param:
-
-In `Vintography.tsx`, add a `useEffect` checking `searchParams.get('returnToWizard') === '1'`. Modify the existing `ResultActions` "Save to Listing" button: when `returnToWizard=1` is in the URL, it becomes "← Return to Sell Wizard" — clicking it stores `{ photoIndex, resultUrl }` to `sessionStorage.setItem('vintifi_studio_result', JSON.stringify(...))` then navigates to `/sell`.
-
-In `Sell.tsx`, a `useEffect` on mount reads and clears `vintifi_studio_result` from sessionStorage and dispatches `SET_ENHANCED_PHOTO`.
-
-### Step 9 — `StepOptimise.tsx`
-
-AI listing optimisation:
-
-**Before generation:** Full-width coral "Generate Optimised Listing" button with `Sparkles` icon. Credit badge shows "Free" when `firstItemFree`, else "1 cr".
-
-**Loading:** Warm skeleton shimmer (`skeleton` class from Phase 2) for title bar (h-12), description block (h-32), 5 hashtag pill skeletons (h-8 w-20).
-
-**After generation** (stubbed after 2s with mock Nike listing):
-- Title: editable `<input>` with char counter `N / 100`
-- Description: editable `<textarea rows={5}>` with char counter `N / 500`
-- Hashtags: toggleable coral pills (`bg-primary/8 text-primary`, tap to remove via `TOGGLE_HASHTAG`)
-- "↻ Regenerate" text link re-runs the stub
-- All appears with spring fade-up animation (`y: 16 → 0`)
-
-Results persist on back/forward navigation — already handled by reducer state.
-
-### Step 10 — `MarketRangeBar.tsx`
-
-Visual price range indicator:
-
-- `bg-surface rounded-xl border border-border p-5`
-- Price labels row: `£low / £median / £high` in `font-mono`
-- Gradient track `h-3`: `bg-gradient-to-r from-success/30 via-primary/30 to-accent/30 rounded-full`
-- Fixed dot markers at 0%, 50%, 100% for low (success), median (primary), high (accent)
-- **Animated chosen price dot** — `motion.div` with `animate={{ left: '{chosenPosition}%' }}`, spring 200/20. 24×24 dark circle with white inner dot
-- Low/Median/High labels below track
-
-### Step 11 — `StepPrice.tsx`
-
-Price intelligence:
-
-**Before check:** Coral "Run Price Check" button with `TrendingUp` icon. Credit badge: "Free" or "1 cr".
-
-**Loading:** Skeleton for the range bar + 3 strategy cards.
-
-**After check** (stubbed mock: low £8, median £14, high £22):
-- `MarketRangeBar` with animated chosen-price indicator
-- Strategy cards grid (`grid-cols-3 gap-3`): Competitive / Balanced / Premium
-  - Each: icon (`Zap` / `Target` / `Crown`), `font-mono text-lg` price, label, sub-description
-  - Selected: `border-primary bg-primary/5`; tapping dispatches `SET_PRICE_STRATEGY` which also updates `chosenPrice`
-- Manual price override: `£` prefix + `type="number" step="0.01"` in `font-mono text-lg`, dispatches `SET_CHOSEN_PRICE`
-- "Balanced" selected by default (spec's `priceStrategy: 'balanced'` default in reducer)
-
-### Step 12 — `StepPack.tsx`
-
-The triumph step — Vinted-Ready Pack:
-
-**Hero:** `BeforeAfterSlider` for photo[0] before/after with `autoReveal={true}` + spring scale-in animation (0.97 → 1, delay 0.2s)
-
-**Enhanced photo strip:** Horizontal scroll of 80×80 thumbnails + "Download all" text link (stubs to `window.open`)
-
-**Copyable sections** (using internal `CopySection` sub-component):
-- Title, Description, Hashtags — each with label + "Copy ✓" button (2s feedback)
-- Price display: `font-mono text-2xl font-bold` with strategy label + copy icon
-
-**Actions:**
-- "Copy All to Clipboard" — ghost border button, assembles multiline text (title + description + hashtags + price)
-- "Save & Finish ✓" — coral primary. On click: `SET_SAVING(true)` → 1.5s stub → `SET_SAVED('mock-listing-id')` → clears sessionStorage, shows `toast.success('Item saved!')` via Sonner
-- Saved state reveals "Ready to list more?" section: "Start another item →" (resets wizard + clears storage). Credits nudge (≤5 remaining) links to `/settings`.
-
-### Step 13 — Route Update: `src/App.tsx`
-
-The existing `/sell` route already points to `Sell.tsx` inside `AppShell`. No route changes needed — just the page replacement. The wizard's narrow `max-w-[680px]` content sits within AppShell's existing `max-w-7xl` container, centred naturally.
+The Edge Functions will gracefully handle missing secrets (return appropriate error responses) so the app remains functional while secrets are being configured.
 
 ---
-
-## Key Spec Details Honoured
-
-- Session key `vintifi_sell_wizard_v2` prevents conflicts with any hypothetical old state
-- `firstItemFree` is hardcoded `true` for Phase 4 (no Supabase) — shows banner + hides credit badges
-- Step 2 has its own continue button — `WizardFooter` is not rendered for step 2
-- Validation on Step 1 shows inline hints only after the user attempts to proceed (not eagerly)
-- All AI stubs use the same 2s delay pattern established in Phase 3
-- Photo Studio return: `sessionStorage.setItem('vintifi_studio_result', ...)` → wizard picks it up on mount
-- `BeforeAfterSlider` reused as-is from Phase 1 (already in codebase)
-- `processImage` reused from `src/lib/vintography-api.ts` (Phase 3 stub) for Quick Remove BG
-- All prices in `font-mono`; headings in Sora (`font-display`); body in DM Sans (`font-body`)
-- Touch targets ≥ 44px on all interactive elements
-
-## What is NOT in Scope for Phase 4
-
-- Real Supabase calls (no `optimize-listing` or `price-check` edge functions yet)
-- Real credit deduction (all mocked as free or stubbed)
-- Real Vinted URL scraping (import stub returns hardcoded mock data)
-- Real listings table save (stubbed with timeout + mock ID)
-- Authentication / real user ID
-- `PreviousEdits` gallery connection to Phase 4 listings
 
 ## File Count
 
-- 1 modified page (`src/pages/Sell.tsx` — full replacement)
-- 1 modified component (`src/pages/Vintography.tsx` — add `returnToWizard` handler in ResultActions)
-- 1 new lib file (`src/lib/sell-wizard-state.ts`)
-- 5 new step components (`StepAddItem`, `StepPhotos`, `StepOptimise`, `StepPrice`, `StepPack`)
-- 4 new shared components (`WizardProgress`, `WizardFooter`, `FirstItemFreeBanner`, `MarketRangeBar`)
+New files:
+- `src/types/database.ts`
+- `src/lib/supabase.ts`
+- `src/contexts/AuthContext.tsx`
+- `src/components/auth/ProtectedRoute.tsx`
+- `src/pages/Login.tsx`
+- `src/pages/SignUp.tsx`
+- `src/pages/ItemDetail.tsx` (placeholder)
+- `src/hooks/useListings.ts`
+- `src/hooks/useVintography.ts`
+- `src/hooks/usePriceCheck.ts`
+- `src/hooks/useOptimiseListing.ts`
+- `src/hooks/useStripe.ts`
+- `src/lib/upload.ts`
+- `supabase/functions/vintography/index.ts`
+- `supabase/functions/optimize-listing/index.ts`
+- `supabase/functions/price-check/index.ts`
+- `supabase/functions/scrape-vinted/index.ts`
+- `supabase/functions/stripe-webhook/index.ts`
+- `supabase/functions/create-checkout/index.ts`
+- `supabase/functions/manage-subscription/index.ts`
+- `supabase/config.toml`
 
-**Total: 11 files**
+Modified files:
+- `src/App.tsx` — add `AuthProvider`, `ProtectedRoute`, `/items/:id` route, updated `QueryClient`
+- `src/lib/vintography-api.ts` — replace stub with real Edge Function call
+- 1 Supabase migration file
+
+**Total: 22 new files, 3 modified files**
+
+---
+
+## What is NOT in Scope
+
+- Wiring `AuthContext` data into existing Phase 2–4 components (e.g. replacing `MOCK_USER` in `AppSidebar`) — that is Phase 5 work
+- Building the Stripe products in the dashboard — user action required
+- Configuring the Stripe webhook URL in the dashboard — user action required after Edge Function deploy
+- Dashboard, Listings, Item Detail page content — Phase 5
+- Price Check, Optimise, Trends page content — Phase 6
