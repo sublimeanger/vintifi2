@@ -1,214 +1,249 @@
 
-# Phase 2: App Shell & Navigation
+# Phase 3: Photo Studio — Implementation Plan
 
-## What This Phase Builds
+## Overview
 
-Phase 2 creates the persistent authenticated shell that wraps every protected page of the Vintifi app. Since Phase 1 (design system + landing page) is complete, all colour tokens, fonts, shadows, and motion configs are already available — Phase 2 builds on top of them.
+This replaces the 19-line stub `src/pages/Vintography.tsx` with a fully featured AI Photo Studio — Vintifi's hero feature. The build decomposes into approximately 17 focused files. No backend (Supabase) is required yet: the `processImage` function will be stubbed to simulate processing with a timeout and return the original image as the "result," allowing the full UI and pipeline to work end-to-end with mock data.
 
-This phase has no Supabase/auth dependency yet. Since there is no existing `AuthContext`, `ProtectedRoute`, or user data in this project, the shell will be built with **mock/stub data** for credits and user profile (e.g. `creditsRemaining = 47`, `creditsLimit = 50`, `displayName = "Jamie"`, `tierLabel = "Pro"`). The route guard structure will be architected correctly so wiring up real auth in a future phase is a clean drop-in replacement.
+The design system (Phase 1) and App Shell (Phase 2) are already in place. The `BottomSheet`, `UpgradeModal`, `BeforeAfterSlider`, `springs` motion config, and all CSS tokens are ready to use.
 
 ---
 
-## New File Structure
+## Architecture at a Glance
 
 ```text
 src/
-├── components/
-│   ├── app/                         ← NEW folder
-│   │   ├── AppShell.tsx             ← Root layout wrapper (uses Outlet)
-│   │   ├── AppSidebar.tsx           ← Desktop sidebar (260px, fixed, dark)
-│   │   ├── MobileHeader.tsx         ← Fixed 56px top bar (mobile only)
-│   │   ├── MobileMenu.tsx           ← Full-screen slide-in menu (right)
-│   │   ├── MobileBottomNav.tsx      ← 5-tab bottom bar with centre FAB
-│   │   ├── MoreSheet.tsx            ← Compact bottom sheet for "More" tab
-│   │   ├── PageHeader.tsx           ← Reusable page title + subtitle
-│   │   ├── PageTransition.tsx       ← Fade + rise wrapper for page content
-│   │   ├── UpgradeModal.tsx         ← Tier upgrade prompt
-│   │   ├── CreditExhaustedCard.tsx  ← Inline credit purchase prompt
-│   │   └── EmptyState.tsx           ← Generic empty state component
-│   └── ui/
-│       └── BottomSheet.tsx          ← NEW: Reusable draggable bottom sheet
 ├── pages/
-│   ├── Dashboard.tsx                ← Stub page (PageTransition + PageHeader)
-│   ├── Vintography.tsx              ← Stub page (Photo Studio)
-│   ├── Sell.tsx                     ← Stub page
-│   ├── Listings.tsx                 ← Stub page (My Items)
-│   ├── PriceCheck.tsx               ← Stub page
-│   ├── Optimize.tsx                 ← Stub page
-│   ├── Trends.tsx                   ← Stub page
-│   └── Settings.tsx                 ← Stub page
-└── App.tsx                          ← Updated with all protected routes
+│   └── Vintography.tsx              ← REPLACED (~200 lines, orchestration only)
+│
+├── components/vintography/
+│   ├── PhotoCanvas.tsx              ← 3-state canvas (original / processing / result)
+│   ├── QuickPresets.tsx             ← Horizontal preset pills strip
+│   ├── OperationBar.tsx             ← Grid/scroll of 7 operation buttons
+│   ├── ConfigContainer.tsx          ← Responsive: inline panel (desktop) / BottomSheet (mobile)
+│   ├── OperationConfig.tsx          ← Routes to correct config component
+│   ├── PipelineStrip.tsx            ← Pipeline chain + AddEffectButton
+│   ├── GenerateButton.tsx           ← Sticky CTA with credit cost
+│   ├── ResultActions.tsx            ← Save / Download / Try Again
+│   ├── StudioEmptyState.tsx         ← Upload prompt when no photo loaded
+│   ├── PreviousEdits.tsx            ← Horizontal gallery (hidden when empty)
+│   └── configs/
+│       ├── shared.tsx               ← SegmentedControl + ThumbnailGrid primitives
+│       ├── SimpleConfig.tsx         ← Remove BG + Enhance (no config needed)
+│       ├── SteamConfig.tsx          ← Intensity segmented control
+│       ├── FlatLayConfig.tsx        ← 5-style visual thumbnail grid
+│       ├── LifestyleConfig.tsx      ← 16-scene thumbnail grid
+│       ├── MannequinConfig.tsx      ← Type + Lighting + Background
+│       └── ModelShotWizard.tsx      ← 3-step mini-wizard with horizontal slide
+│
+└── lib/
+    ├── vintography-state.ts         ← Types, reducer, action types, helpers
+    └── vintography-api.ts           ← processImage (stubbed for Phase 3)
 ```
 
 ---
 
-## Implementation Order
+## Key Design Rules Enforced Throughout
 
-### Step 1 — CSS additions to `index.css`
-Add missing utility class `bg-primary/8` (used in empty state icon container) and the warm-tinted shimmer keyframe for skeleton loading. Also add `shadow-primary` and `shadow-primary-hover` as utility classes since they're referenced in spec copy.
-
-### Step 2 — `src/components/ui/BottomSheet.tsx`
-Reusable bottom sheet used by `MoreSheet` (and later Photo Studio drawer in Phase 3):
-- Props: `isOpen`, `onClose`, `children`, `height` (`auto | sm | md | lg | full`), `showHandle`
-- `motion.div` with `initial={{ y: '100%' }} → animate={{ y: 0 })`, spring 300/30
-- `drag="y"`, `dragConstraints={{ top: 0 }}`, dismiss on drag offset > 100px or velocity > 500
-- `AnimatePresence` wrapper so exit animation plays
-- Backdrop overlay that dismisses on click
-- Top-rounded corners (20px), drag handle bar, safe-area-inset-bottom padding
-
-### Step 3 — `src/components/app/AppSidebar.tsx`
-Desktop sidebar — fixed left, 260px, full viewport height, dark charcoal background (`hsl(var(--sidebar-background))`):
-
-**Top:** Vintifi wordmark (Sora Bold, coral, links to `/dashboard`)
-
-**Nav items (4 only):**
-- Dashboard → `/dashboard` (LayoutDashboard icon)
-- Photo Studio → `/vintography` (Camera icon)
-- Sell → `/sell` (PlusCircle icon, slightly brighter inactive state)
-- My Items → `/listings` (Package icon)
-- Active item: animated Framer Motion `layoutId="sidebar-active-pill"` background pill sliding between routes
-- Active styles: coral text + `bg-primary/12` background
-- Inactive styles: `text-sidebar-muted`, hover `text-white/80 bg-white/[0.06]`
-
-**Spacer:** `flex-1` div pushes footer to bottom
-
-**Credits meter card** (stubbed with mock data):
-- `bg-white/[0.06]` container, rounded-xl, p-3.5
-- "Credits" label (DM Sans xs, white/50) + `47 / 50` in JetBrains Mono
-- Animated progress bar: coral (normal > 20%), amber (≤ 20%), red (empty)
-- "Top up →" link appears when ≤ 5 credits remaining
-- Unlimited mode shows "∞ Unlimited" with no bar
-- Progress bar width animated with Framer Motion spring on value change
-
-**User profile row:**
-- Avatar circle with first initial (uppercase)
-- Name truncated, Settings link + Sign out button
-- Border-top `border-white/[0.08]`
-
-### Step 4 — `src/components/app/MobileHeader.tsx`
-Fixed 56px top header (mobile only, `lg:hidden`):
-- Left: Vintifi logo (Sora Bold, coral, links to `/dashboard`)
-- Right: Credits pill (Sparkles icon + number in JetBrains Mono, taps to `/settings`)
-  - Normal: neutral, Low (≤5): `bg-warning/10` amber tint, Critical (≤2): pulse animation
-- Far right: Hamburger button (Menu icon, opens `MobileMenu`)
-- `backdrop-blur-xl`, border-bottom, z-50
-
-### Step 5 — `src/components/app/MobileMenu.tsx`
-Full-screen overlay menu, slides in from right (`x: '100%' → x: 0`, spring 300/30):
-- Backdrop overlay (black/50, dismisses on click)
-- Panel: 85vw, max 360px, bg-background, shadow-2xl
-- Close button (X icon, absolute top-right, rounded-full, bg-surface-sunken)
-- **Primary nav links** (Sora, 22px, weight 600, foreground colour): Dashboard, Photo Studio, Sell, My Items — active items are coral
-- Divider
-- **Secondary nav links** (DM Sans, 16px, weight 500, muted): Price Check, Listing Optimiser, Trends
-- Divider
-- Credits meter (same as sidebar version, compact)
-- Settings link + Sign out button
-- Tapping any link closes the menu and navigates
-
-### Step 6 — `src/components/app/MoreSheet.tsx`
-Compact bottom sheet opened by the "More" tab on mobile bottom nav:
-- Uses `BottomSheet` component with `height="auto"`
-- Items: Price Check, Listing Optimiser, Trends (with icons, 14px 20px padding)
-- Divider
-- Settings, Sign out
-- Each item: 20px icon (muted), DM Sans 15px, hover `bg-surface-sunken`
-
-### Step 7 — `src/components/app/MobileBottomNav.tsx`
-5-tab fixed bottom navigation (mobile only, `lg:hidden`):
-- Container: fixed bottom-0, 72px height + `env(safe-area-inset-bottom)`, `backdrop-blur-xl`, border-top, z-50
-- **Tabs:** Home (`/dashboard`), Studio (`/vintography`), **Sell FAB** (`/sell`), Items (`/listings`), More (opens MoreSheet)
-- Standard tabs: icon (20px) + label (10px, DM Sans) + animated `layoutId="bottomnav-indicator"` dot above active tab
-- Active: coral icon + coral label; Inactive: `text-foreground/40`
-- **Centre FAB (Sell):**
-  - `-mt-6` (elevated 24px above baseline)
-  - `w-14 h-14 rounded-2xl` (NOT a circle — square with 16px radius)
-  - Coral background + coral shadow glow `shadow-[0_4px_14px_hsla(350,80%,58%,0.3)]`
-  - Plus icon, `strokeWidth={2.5}`
-  - "Sell" label sits below at `-bottom-4`
-- "More" tab opens `MoreSheet` (not the full-screen `MobileMenu`)
-
-### Step 8 — `src/components/app/AppShell.tsx`
-Root layout composition:
-```jsx
-<div className="min-h-screen bg-background">
-  <div className="hidden lg:block"><AppSidebar /></div>
-  <div className="lg:hidden"><MobileHeader /></div>
-  <main className="lg:ml-[260px] min-h-screen pt-14 lg:pt-0 pb-20 lg:pb-0">
-    <div className="max-w-7xl mx-auto px-4 lg:px-8 py-4 lg:py-8">
-      <Outlet />
-    </div>
-  </main>
-  <div className="lg:hidden"><MobileBottomNav /></div>
-</div>
-```
-
-### Step 9 — `src/components/app/PageHeader.tsx`
-Reusable page header used at the top of every protected page:
-- Props: `title`, `subtitle?`, `action?` (right-aligned React node)
-- `h1`: Sora, 24px, bold, tight tracking
-- `p`: DM Sans, sm, muted-foreground
-
-### Step 10 — `src/components/app/PageTransition.tsx`
-Thin wrapper using Framer Motion:
-- `initial={{ opacity: 0, y: 8 }} → animate={{ opacity: 1, y: 0 }}`
-- Spring: stiffness 260, damping 28
-
-### Step 11 — Shared utility components
-- **`EmptyState.tsx`:** Icon in coral/8 rounded-2xl container, title (Sora), description (DM Sans), optional CTA link
-- **`UpgradeModal.tsx`:** Modal with tier card (matching pricing page style), primary CTA "Start 7-Day Free Trial", ghost CTA "Top up credits"
-- **`CreditExhaustedCard.tsx`:** Inline warning card with amber/5 background, "10 credits · £2.99" primary button, "Upgrade plan" ghost button
-
-### Step 12 — Stub pages (`src/pages/`)
-Create 8 lean stub pages, each using `PageTransition` + `PageHeader` + `EmptyState`:
-- `Dashboard.tsx` — title "Dashboard", subtitle "Your command centre"
-- `Vintography.tsx` — title "Photo Studio", EmptyState with Camera icon
-- `Sell.tsx` — title "Sell an Item"
-- `Listings.tsx` — title "My Items", EmptyState with Package icon
-- `PriceCheck.tsx` — title "Price Check"
-- `Optimize.tsx` — title "Listing Optimiser"
-- `Trends.tsx` — title "Trends"
-- `Settings.tsx` — title "Settings"
-
-### Step 13 — Update `src/App.tsx`
-Add all 8 protected routes wrapped in `AppShell`. Since there's no auth yet, routes are directly accessible (no `ProtectedRoute` guard — that's Phase 3+):
-```jsx
-<Route element={<AppShell />}>
-  <Route path="/dashboard" element={<Dashboard />} />
-  <Route path="/vintography" element={<Vintography />} />
-  <Route path="/sell" element={<Sell />} />
-  <Route path="/listings" element={<Listings />} />
-  <Route path="/price-check" element={<PriceCheck />} />
-  <Route path="/optimize" element={<Optimize />} />
-  <Route path="/trends" element={<Trends />} />
-  <Route path="/settings" element={<Settings />} />
-</Route>
-```
-
-The `/` (landing page) route remains unchanged — it does NOT use `AppShell`.
+1. **Photo always visible** — Mobile canvas is `position: sticky; top: 56px` and never scrolls away
+2. **Generate button always reachable** — Sticky footer in desktop panel, pinned inside BottomSheet on mobile
+3. **Simple = two taps, complex = guided** — Remove BG/Enhance open a minimal `sm` drawer; AI Model Shot opens a 3-step wizard in an `lg` drawer
 
 ---
 
-## Key Spec Details to Honour
+## Implementation Steps
 
-- Sidebar background: `hsl(230, 20%, 8%)` — dark charcoal, NOT pure black
-- Active pill uses Framer Motion `layoutId` — slides smoothly between routes
-- Sell nav item has slightly brighter inactive text (`text-white/75`) vs others (`text-sidebar-muted`)
-- Credits `isUnlimited` check: `>= 999999` (NOT 999 — critical bug fix from spec)
-- FAB is `rounded-2xl` square (16px radius), NOT a circle
-- Bottom nav dot indicator uses `layoutId="bottomnav-indicator"` for smooth slide
-- All credit numbers rendered in `font-mono` (JetBrains Mono)
-- `prefers-reduced-motion` disables all animations
-- All touch targets ≥ 44px (min-h-[44px] min-w-[44px] on interactive elements)
-- Safe area inset applied to bottom nav for iOS compatibility
+### Step 1 — State Foundation: `src/lib/vintography-state.ts`
+
+Create the complete reducer with all types and actions exactly as specced:
+
+- **Types:** `Operation` (8 values), `OperationParams`, `PipelineStep`, `VintographyState`
+- **Actions:** 17 action types covering photo, pipeline, processing, drawer, wizard
+- **Reducer:** All 17 cases with correct state transitions
+- **Helpers:**
+  - `getDefaultParams(operation)` — sensible defaults per operation
+  - `getOperationCredits(operation)` — AI Model = 4 credits, others = 1
+  - `getPipelineCredits(pipeline)` — sum of all steps
+  - `AI_MODEL_CHAIN_ALLOWED`, `PRO_OPERATIONS`, `BUSINESS_OPERATIONS` constants
+- **Critical:** `isUnlimited` check is `>= 999999` (not 999)
+
+### Step 2 — API Layer: `src/lib/vintography-api.ts`
+
+Stubbed implementation that simulates a 2-second processing delay and returns the original image URL as the "result." This makes the full generate → result → before/after flow testable without a backend:
+
+```typescript
+export async function processImage(imageUrl, operation, params) {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  return { success: true, imageUrl }; // stub: returns original as result
+}
+```
+
+The function signature is identical to what will be wired to a real Supabase Edge Function in a later phase.
+
+### Step 3 — Shared Config Primitives: `src/components/vintography/configs/shared.tsx`
+
+Two reusable components used across multiple operation configs:
+
+- **`SegmentedControl`** — iOS-style track with `bg-surface-sunken rounded-lg p-1`. Active segment: `bg-surface shadow-sm` (raised white pill). Props: `label`, `options[]`, `value`, `onChange`
+- **`ThumbnailGrid`** — Grid of colour-swatch tiles with label. Active tile: `border-primary bg-primary/5`. Props: `label`, `options[]`, `value`, `onChange`, `columns`
+
+### Step 4 — Photo Canvas: `src/components/vintography/PhotoCanvas.tsx`
+
+Three mutually exclusive visual states driven by `state`:
+
+**State 1 (original):** Simple `img` in a `rounded-xl bg-surface shadow-lg` container. `aspect-[4/5]` on mobile, `lg:aspect-auto lg:max-h-[calc(100vh-200px)]` on desktop.
+
+**State 2 (processing):** Same `img` with:
+- Inset `motion.div` breathing glow: `boxShadow` animates from `0 → inset 0 0 40px 8px hsla(350,80%,58%,0.1) → 0`, 2.5s repeat
+- Bottom-centre chip: `bg-secondary/80 backdrop-blur-lg rounded-full` with spinning `Loader2` + operation label + step counter `(1/3)`
+
+**State 3 (result):** Spring-animated reveal (`scale 0.97 → 1`) wrapping the existing `BeforeAfterSlider` component from Phase 1, with `autoReveal={true}` and `aspectRatio="4/5"`.
+
+**Mobile wrapper:** `sticky top-14 z-10 -mx-4 px-4 pb-3 bg-background` — bleeds to screen edges, stays below the 56px mobile header.
+
+**Processing label helper:** `getProcessingLabel(operation)` maps all 8 operations to human-readable strings ("Removing background…", "Generating model shot…" etc.).
+
+### Step 5 — Operation Bar: `src/components/vintography/OperationBar.tsx`
+
+Defines the 7 operations array (id, label, icon, credits, tier). Uses these Lucide icons: `Eraser`, `ImageIcon`, `Sparkles`, `Wind`, `LayoutIcon`, `PersonStanding`, `UserCircle2`.
+
+**Rendering:**
+- Desktop: `grid grid-cols-4 gap-2 p-3` (2 rows, 4 columns)
+- Mobile: `flex gap-2 overflow-x-auto scrollbar-hide px-1 py-2`
+
+**OperationButton:** `min-w-[72px]` on mobile, flex-column layout with icon (20px) → label (11px) → credit cost (9px font-mono). Selected: `bg-primary/10 ring-2 ring-primary`. Locked: lock badge (`-top-1 -right-1 absolute`), 60% opacity. Tap unlocked → `SELECT_OPERATION`. Tap selected → `DESELECT_OPERATION`. Tap locked → open `UpgradeModal`.
+
+Tier locking logic: Free tier has access to `clean_bg`, `lifestyle_bg`, `enhance`, `decrease`. Pro: adds `flatlay`, `mannequin`. Business: adds `ai_model`. For Phase 3, mock user tier is "Pro" (matching existing mock data in AppSidebar).
+
+### Step 6 — Quick Presets: `src/components/vintography/QuickPresets.tsx`
+
+4 presets: Marketplace Ready (2cr, free), Editorial (1cr, pro), Quick Clean (1cr, free), Steam & List (2cr, free).
+
+Horizontal scroll strip: `flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2`. Each pill: `rounded-full border px-4 py-2`. Active (pipeline matches preset): `bg-primary text-white border-primary`. Lock icon for pro-gated presets. Credit badge uses `font-mono text-[11px]`.
+
+`isPresetActive` checks if the current pipeline operations array exactly matches the preset steps array.
+
+### Step 7 — Operation Configs (all in `configs/`)
+
+**`SimpleConfig.tsx`** — Title + description + italic tip text. No interactive controls. Drawer opens at `sm` height.
+
+**`SteamConfig.tsx`** — `SegmentedControl` for 3 intensity options (Light Press / Steam / Deep Press).
+
+**`FlatLayConfig.tsx`** — `grid grid-cols-3 gap-2`. 5 colour-swatch tiles (Clean White, With Accessories, Seasonal, Denim, Wood) using `ThumbnailGrid`.
+
+**`LifestyleConfig.tsx`** — Same pattern as FlatLayConfig but 16 background scene swatches in `grid-cols-3`. Drawer height `md`.
+
+**`MannequinConfig.tsx`** — Three stacked sections: Type segmented control (4 options), Lighting segmented control (3 options), Background thumbnail grid (4 columns). Uses `SegmentedControl` + `ThumbnailGrid` from shared.
+
+**`ModelShotWizard.tsx`** — 3-step wizard with `AnimatePresence mode="wait"` horizontal slide (`x: ±40`). Step indicator dots above title. Steps:
+- Step 1: Gender (2-col grid of large buttons) + Look (3-col grid, 6 numbered placeholders)
+- Step 2: Pose (2-col grid, 6 poses) + Background `ThumbnailGrid` (4 cols, 8 scenes)
+- Step 3: Summary card + Full garment `Switch` + garment description `textarea`
+- Next/Back buttons live INSIDE the config area. Generate button in footer only appears on step 3.
+
+### Step 8 — Config Container: `src/components/vintography/ConfigContainer.tsx`
+
+Responsive wrapper using `useMediaQuery('(min-width: 1024px)')`:
+
+**Desktop:** `flex flex-col h-full` → scrollable config area (`flex-1 overflow-y-auto`) + sticky footer with gradient fade + `GenerateButton`
+
+**Mobile:** Uses `BottomSheet` from Phase 2 (`src/components/ui/BottomSheet.tsx`). `getDrawerHeight(operation)` maps operations to `sm / md / lg`. `isOpen={state.drawerOpen}` controlled by reducer. Dismiss calls `CLOSE_DRAWER`.
+
+### Step 9 — Generate Button: `src/components/vintography/GenerateButton.tsx`
+
+- Hidden when `activeStep?.operation === 'ai_model' && state.modelWizardStep < 3`
+- Disabled when: `pipeline.length === 0 || isProcessing`
+- Active: coral background with `shadow-[0_4px_14px_hsla(350,80%,58%,0.3)]`, lifts on hover `-translate-y-0.5`
+- Processing state: spinning `Loader2` + "Processing…"
+- Label: "✨ Generate · X credit(s)"
+- Credit cost updates in real-time as pipeline changes
+
+For Phase 3 (no auth yet), uses mock credits from `MOCK_USER` (47 remaining). Always `canAfford = true` for Phase 3 since credits are mocked.
+
+`handleGenerate` iterates the pipeline sequentially using `processImage`, dispatching `PROCESSING_STEP_COMPLETE` between steps and `PROCESSING_COMPLETE` / `PROCESSING_ERROR` at end.
+
+### Step 10 — Pipeline Strip: `src/components/vintography/PipelineStrip.tsx`
+
+Renders below config options, above the generate footer:
+
+- Pipeline pills with `pl-3 pr-1.5 py-1.5 rounded-full` — click to `SET_ACTIVE_STEP`, × to `REMOVE_PIPELINE_STEP`
+- Active pill: `bg-primary/10 border-primary text-primary`
+- Arrow `ChevronRight` (muted/30) between steps
+- Credit total: `font-mono text-xs` right-aligned
+- `AddEffectButton`: dashed-border button → inline popover listing available operations. Enforces: no duplicates, no AI Model in chain, AI Model can only be followed by `enhance` or `decrease`, max 4 steps
+
+### Step 11 — Result Actions: `src/components/vintography/ResultActions.tsx`
+
+Appears with spring fade-up animation (delay 0.3s) after `state.resultPhotoUrl` is set:
+
+- Primary row: "Save to Listing" (coral, flex-1) + Download icon button
+- "Try a different effect" ghost button → `RESET`
+- Divider section: "Next photo" button (if `hasNextPhoto`), "← Return to Sell Wizard" link (if `returnToWizard` URL param), credits remaining counter with top-up link when ≤5
+
+For Phase 3: Download uses `window.open(resultUrl)`. "Save to Listing" is a stub that logs to console.
+
+### Step 12 — Studio Empty State: `src/components/vintography/StudioEmptyState.tsx`
+
+Shown when `!state.originalPhotoUrl`:
+
+- 80×80 `rounded-3xl bg-primary/8` icon container with `Camera` (36px)
+- Headline + subtext
+- Drag-and-drop upload zone: `border-2 border-dashed border-border hover:border-primary rounded-2xl p-8`. `onDrop` reads the dropped file, creates `URL.createObjectURL(file)`, calls `onPhotoSelected(url)`
+- `<input type="file" accept="image/*">` for click-to-browse
+- "Choose from My Items" border button (stub: navigates to `/listings`)
+- Quick Start presets strip (first 3 presets shown as list items)
+
+### Step 13 — Previous Edits Gallery: `src/components/vintography/PreviousEdits.tsx`
+
+For Phase 3, this renders nothing (returns `null`) since there's no Supabase backend yet. The component accepts `onSelect` prop and the data-fetching hook is stubbed with an empty array. The gallery structure is wired up so Phase 4 can simply connect it to a real query.
+
+### Step 14 — Main Page: `src/pages/Vintography.tsx`
+
+Replace the 19-line stub with the ~200-line orchestration component:
+
+- `useReducer(vintographyReducer, initialState)`
+- `useSearchParams` to handle `imageUrl` + `itemId` deep links
+- **Empty state branch:** if `!state.originalPhotoUrl` → render `StudioEmptyState`
+- **Main layout:**
+  ```
+  Desktop: flex gap-6 items-start
+    Left panel (400px, sticky top-8, max-h calc(100vh-64px)):
+      QuickPresets
+      OperationBar
+      flex-1 overflow-y-auto: ConfigContainer (desktop mode)
+    Right panel (flex-1):
+      PhotoCanvas (desktop: normal flow)
+      ResultActions (if resultPhotoUrl)
+      PreviousEdits
+  
+  Mobile:
+    PhotoCanvas (sticky top-14, -mx-4 bleed, bg-background backdrop)
+    QuickPresets
+    OperationBar
+    ResultActions (if resultPhotoUrl)
+    PreviousEdits
+    ConfigContainer (BottomSheet drawer, outside flex layout)
+  ```
 
 ---
 
-## What Is Not In Scope for Phase 2
+## What is NOT in Scope for Phase 3
 
-- Real authentication / Supabase auth integration (Phase 3+)
-- Actual page content beyond stubs (Phase 3+ per feature)
-- Real-time credit updates from Supabase (stubs used; wire-up is Phase 3)
-- The "First Item Free" pass state (requires auth context)
-- Sell Wizard (Phase 4)
-- Photo Studio functionality (Phase 3)
+- Real Supabase backend / Edge Function (processImage is stubbed)
+- Real credit deduction (mock credits used)
+- "Save to Listing" backend integration (console.log stub)
+- PreviousEdits data fetching (empty/null render)
+- Authentication / ProtectedRoute guard (Phase 4)
+- Deep links from Sell Wizard (`itemId`, `returnToWizard` wired but stub)
+
+---
+
+## File Count
+
+17 new/modified files:
+- 1 updated page (`Vintography.tsx`)
+- 10 new components (`PhotoCanvas`, `QuickPresets`, `OperationBar`, `ConfigContainer`, `OperationConfig`, `PipelineStrip`, `GenerateButton`, `ResultActions`, `StudioEmptyState`, `PreviousEdits`)
+- 6 config sub-components (`shared`, `SimpleConfig`, `SteamConfig`, `FlatLayConfig`, `LifestyleConfig`, `MannequinConfig`, `ModelShotWizard` — actually 7 files)
+- 2 new lib files (`vintography-state.ts`, `vintography-api.ts`)
+
+The existing `BeforeAfterSlider`, `BottomSheet`, `UpgradeModal`, and all CSS design tokens are used as-is with no modifications.
