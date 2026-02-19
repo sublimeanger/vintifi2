@@ -89,7 +89,6 @@ export function StepPack({ state, dispatch }: StepPackProps) {
       dispatch({ type: 'SET_SAVING', loading: false });
     }
   }
-  }
 
   function handleCopyAll() {
     const text = [
